@@ -1,11 +1,15 @@
 # app.py
 import os
-import json
+#import json
 import logging
 import requests
-from flask import Flask, request, jsonify, abort
+from flask import (Flask, jsonify)
+                   #request, abort)
+
+import psycopg2
 
 app = Flask(__name__)
+
 print("DEBUG NOTION_TOKEN =", os.getenv("NOTION_TOKEN"))
 logging.basicConfig(level=logging.INFO)
 
@@ -50,23 +54,15 @@ def root():
 def health():
     return {"ok": True}
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        return {"ok": "webhook alive"}
-
-    if WEBHOOK_SECRET and request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
-        abort(401)
-
-    data = request.get_json(force=True, silent=True) or {}
-    page_id = data.get("page_id")
-    text = data.get("text", "응답: 헬로 받음 ✅")
-    if not page_id:
-        return jsonify({"error": "page_id is required"}), 400
-
+@app.route("/dbtest")
+def db_test():
     try:
-        res = notion_append_text_block(page_id, text)
-        return jsonify({"status": "ok", "notion_object": res.get("object", "")})
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        cur = conn.cursor()
+        cur.execute("SELECT NOW();")
+        now = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return jsonify({"db_connection": "ok", "time": str(now)})
     except Exception as e:
-        # 🔎 디버그용: Notion 에러 본문을 그대로 보여준다
-        return jsonify({"status": "notion_error", "detail": str(e)}), 500
+        return jsonify({"db_connection": "fail", "error": str(e)}), 500
