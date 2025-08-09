@@ -1,14 +1,13 @@
 # app.py
-import os
+
 #import json
 import logging
-#import requests
-from flask import (Flask, jsonify)
-                   #request, abort)
+import request
 
-import psycopg2
 
+from flask import Flask, request, Response, jsonify
 from openai import OpenAI
+import os, psycopg2
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
