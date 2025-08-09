@@ -61,8 +61,7 @@ def db_test():
         cur = conn.cursor()
         cur.execute("SELECT NOW();")
         now = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return jsonify({"db_connection": "ok", "time": str(now)})
+        cur.close(); conn.close()
+        return jsonify({"db_connection":"ok","time":str(now)})
     except Exception as e:
-        return jsonify({"db_connection": "fail", "error": str(e)}), 500
+        return jsonify({"db_connection":"fail","error":str(e)}), 500
