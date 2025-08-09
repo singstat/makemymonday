@@ -54,17 +54,18 @@ def webhook():
     if request.method == "GET":
         return {"ok": "webhook alive"}
 
-    # 간단 인증
     if WEBHOOK_SECRET and request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         abort(401)
 
     data = request.get_json(force=True, silent=True) or {}
     page_id = data.get("page_id")
     text = data.get("text", "응답: 헬로 받음 ✅")
-
     if not page_id:
         return jsonify({"error": "page_id is required"}), 400
 
-    app.logger.info("Append to Notion page %s: %s", page_id, text)
-    res = notion_append_text_block(page_id, text)
-    return jsonify({"status": "ok", "notion_object": res.get("object", "")})
+    try:
+        res = notion_append_text_block(page_id, text)
+        return jsonify({"status": "ok", "notion_object": res.get("object", "")})
+    except Exception as e:
+        # 🔎 디버그용: Notion 에러 본문을 그대로 보여준다
+        return jsonify({"status": "notion_error", "detail": str(e)}), 500
