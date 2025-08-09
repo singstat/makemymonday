@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 
 # === 환경변수 ===
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")          # ntn_... 또는 secret_...
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")  # 예: mondaysing
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 NOTION_VERSION = "2022-06-28"
 NOTION_API = "https://api.notion.com/v1"
 
