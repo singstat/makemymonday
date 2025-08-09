@@ -6,6 +6,7 @@ import requests
 from flask import Flask, request, jsonify, abort
 
 app = Flask(__name__)
+print("DEBUG NOTION_TOKEN =", os.getenv("NOTION_TOKEN"))
 logging.basicConfig(level=logging.INFO)
 
 # === 환경변수 ===
