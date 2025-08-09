@@ -8,6 +8,8 @@ from flask import (Flask, jsonify)
 
 import psycopg2
 
+from openai import OpenAI
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
