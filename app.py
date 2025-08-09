@@ -12,7 +12,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def init_db():
-    db_url = os.getenv("DATABASE_URL")  # 함수 안에서 불러오기
+    db_url = os.getenv("DATABASE_URL")
     schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
     with psycopg2.connect(db_url) as conn:
         with conn.cursor() as cur:
@@ -21,12 +21,11 @@ def init_db():
         conn.commit()
     print("✅ DB schema ensured")
 
-# --- 앱 시작 시 한 번만 실행 ---
-if os.environ.get("RUN_MAIN") == "true":  # Flask reloader 때문에 2번 실행 방지
-    try:
-        init_db()
-    except Exception as err:
-        print(f"⚠️ DB init failed: {err}")
+# 🔧 gunicorn 환경에서도 실행되도록: 모듈 로드 시 바로 돌림 (중복 안전)
+try:
+    init_db()
+except Exception as err:
+    print(f"⚠️ DB init failed: {err}")
 
 @app.route("/")
 def home():
