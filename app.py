@@ -22,10 +22,24 @@ def init_db():
     print("✅ DB schema ensured")
 
 # 🔧 gunicorn 환경에서도 실행되도록: 모듈 로드 시 바로 돌림 (중복 안전)
-try:
-    init_db()
-except Exception as err:
-    print(f"⚠️ DB init failed: {err}")
+#try:
+#    init_db()
+#except Exception as err:
+#    print(f"⚠️ DB init failed: {err}")
+
+@app.route("/dbtest")
+def db_test():
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        cur = conn.cursor()
+        cur.execute("SELECT NOW();")
+        now = cur.fetchone()[0]
+        cur.close(); conn.close()
+        return jsonify({"db_connection":"ok","time":str(now)})
+    except Exception as e:
+        return jsonify({"db_connection":"fail","error":str(e)}), 500
+
+
 
 @app.route("/")
 def home():
@@ -39,14 +53,10 @@ def root():
 def health():
     return {"ok": True}
 
-@app.route("/dbtest")
-def db_test():
-    try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-        cur = conn.cursor()
-        cur.execute("SELECT NOW();")
-        now = cur.fetchone()[0]
-        cur.close(); conn.close()
-        return jsonify({"db_connection":"ok","time":str(now)})
-    except Exception as e:
-        return jsonify({"db_connection":"fail","error":str(e)}), 500
+
+client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
+
+@app.get("/envcheck")
+def envcheck():
+    return {"OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY"))}
+
