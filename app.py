@@ -64,6 +64,8 @@ def session_start():
     SESSIONS[sid] = {"created": now, "last": now, "facts": facts, "messages": []}
     return jsonify({"session_id": sid, "facts_count": len(facts)})
 
+from datetime import datetime
+
 @app.route("/monday", methods=["GET","POST"])
 def monday():
     sid = request.args.get("sid") or (request.get_json(silent=True) or {}).get("sid")
@@ -75,7 +77,13 @@ def monday():
     if not q:
         q = "상태 체크. 불필요한 말 없이 한 문장."
 
+    # 오늘 날짜 (서버 시간)
+    today_str = datetime.now().strftime("%Y-%m-%d (%A)")
+
+    # facts에 오늘 날짜 추가
     facts = SESSIONS.get(sid, {}).get("facts", [])
+    facts = facts + [f"오늘 날짜는 {today_str}"]
+
     reply = ask_monday(q, facts)
 
     if sid in SESSIONS:
@@ -84,6 +92,7 @@ def monday():
         SESSIONS[sid]["messages"].append(("monday", reply))
 
     return Response(reply, mimetype="text/plain; charset=utf-8")
+
 
 @app.post("/session/end")
 def session_end():
