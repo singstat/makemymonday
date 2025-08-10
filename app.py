@@ -2,7 +2,9 @@ import os, time, uuid
 from flask import Flask, request, jsonify, Response, render_template
 import traceback, logging
 from datetime import datetime, timedelta, timezone
-import psycopg2, OpenAI
+import psycopg2
+from openai import OpenAI
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 logging.basicConfig(level=logging.INFO)
