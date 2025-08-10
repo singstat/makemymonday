@@ -82,12 +82,22 @@ from flask import render_template
 def ui():
     return render_template("ui.html")
 
-@app.post("/monday")
+@app.route("/monday", methods=["GET","POST"])
 def monday():
-    content = request.get_json()
-    user_message = content.get("message", "")
+    # 1) 입력 뽑기 (GET/POST 둘 다 허용)
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        q = (data.get("message") or "").strip()
+    else:
+        q = (request.args.get("q") or "").strip()
 
-    # 여기에 Monday 로직 호출
-    reply = f"네가 보낸 말: {user_message}"  # 테스트용
+    if not q:
+        q = "상태 체크. 불필요한 말 없이 한 문장."
 
-    return jsonify({"reply": reply})
+    # 2) Monday 호출 (ask_monday는 네가 이미 만든 그 함수)
+    try:
+        reply = ask_monday(q)
+        return Response(reply, mimetype="text/plain; charset=utf-8")
+    except Exception as err:
+        return Response(f"[ERROR] {type(err).__name__}: {err}", status=500,
+                        mimetype="text/plain; charset=utf-8")
