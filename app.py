@@ -2,6 +2,7 @@ import os, time, uuid
 from flask import Flask, request, jsonify, Response, render_template
 import traceback, logging
 from datetime import datetime, timedelta, timezone
+import psycopg2
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 logging.basicConfig(level=logging.INFO)
