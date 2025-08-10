@@ -142,22 +142,39 @@ def monday():
     if not q:
         q = "상태 체크. 불필요한 말 없이 한 문장."
 
-    # 오늘 날짜 (서버 시간)
-    today_str = datetime.now().strftime("%Y-%m-%d (%A)")
+    # 세션 확보
+    sess = SESSIONS.get(sid)
+    if not sess:
+        # 세션이 없으면 임시 세션처럼 동작
+        facts = load_facts_from_db()
+        sess = {"messages": [], "summary": ""}
+    else:
+        facts = sess.get("facts", [])
 
-    # facts에 오늘 날짜 추가
-    facts = SESSIONS.get(sid, {}).get("facts", [])
-    facts = facts + [f"오늘 날짜는 {today_str}"]
+    # 길어지면 앞부분 요약
+    api_key = os.getenv("OPEN_AI_KEY")
+    client = OpenAI(api_key=api_key) if (OpenAI and api_key) else None
+    if client and need_summarize(sess):
+        summarize_history(client, sess)
 
-    reply = ask_monday(q, facts)
+    # LLM 호출(세션 로그 전부 포함)
+    if client:
+        llm_input = client.responses.create(
+            model="gpt-4o-mini",
+            input=build_messages_for_llm(sess, q, facts)
+        )
+        reply = (llm_input.output_text or "").strip() or "(빈 응답)"
+    else:
+        reply = f"(echo) {q}"
 
+    # 세션에 기록
     if sid in SESSIONS:
-        SESSIONS[sid]["last"] = time.time()
-        SESSIONS[sid]["messages"].append(("user", q))
-        SESSIONS[sid]["messages"].append(("monday", reply))
+        sess["last"] = time.time()
+        sess["messages"].append(("user", q))
+        sess["messages"].append(("assistant", reply))
+        SESSIONS[sid] = sess
 
     return Response(reply, mimetype="text/plain; charset=utf-8")
-
 
 @app.post("/session/end")
 def session_end():
