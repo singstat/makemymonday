@@ -31,11 +31,7 @@ async function sendMessage(){
   } catch (e) {
     out.textContent = '[ERROR] ' + e;
   }
-}
 
-document.getElementById('send').addEventListener('click', sendMessage);
-document.getElementById('userInput').addEventListener('keydown', e=>{
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
-window.addEventListener('DOMContentLoaded', startSession);
-window.addEventListener('beforeunload', endSession);
+  // 전송 후 입력창 비우기
+  input.value = '';
+}
