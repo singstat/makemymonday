@@ -10,7 +10,7 @@ app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
 KST = timezone(timedelta(hours=9))
 MAX_TURNS = 200
 SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
-
+SESSIONS = {}
 
 def db_conn():
     import psycopg2, os
