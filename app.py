@@ -60,11 +60,24 @@ def home():
 def envcheck():
     return {"OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY"))}
 
-@app.get("/monday")
-def talk_to_monday():
-    q = request.args.get("q", "상태 체크. 불필요한 말 없이 한 문장.")
-    try:
-        reply = ask_monday(q)
-        return Response(reply, mimetype="text/plain; charset=utf-8")
-    except Exception as err:
-        return Response(f"[ERROR] {type(err).__name__}: {err}", status=500, mimetype="text/plain; charset=utf-8")
+@app.get("/monday_stream")
+def monday_stream():
+    def gen():
+        resp = client.responses.create(
+            model="gpt-4o-mini",
+            input=[{"role":"system","content":build_system_from_facts()},
+                   {"role":"user","content":request.args.get("q","")}],
+            stream=True,
+        )
+        for event in resp:
+            chunk = getattr(event, "delta", None)
+            if chunk and chunk.get("content"):
+                yield chunk["content"][0]["text"]
+    return Response(gen(), mimetype="text/plain; charset=utf-8")
+
+
+from flask import render_template
+
+@app.get("/ui")
+def ui():
+    return render_template("ui.html")
