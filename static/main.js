@@ -2,6 +2,7 @@ async function sendMessage() {
   const input = document.getElementById('userInput');
   const out = document.getElementById('response');
   const msg = (input.value || '').trim();
+
   out.textContent = '…응답 대기중';
 
   try {
@@ -12,3 +13,8 @@ async function sendMessage() {
     out.textContent = '[ERROR] ' + e;
   }
 }
+
+// Enter로도 전송
+document.getElementById('userInput').addEventListener('keydown', (e)=>{
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
