@@ -3,6 +3,30 @@ from flask import Flask, request, jsonify, Response, render_template
 
 # 템플릿/정적 경로 명시 (경로 꼬임 방지)
 app = Flask(__name__, template_folder="templates", static_folder="static")
+# 맨 위 import 옆에 추가
+import traceback, logging
+logging.basicConfig(level=logging.INFO)
+app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
+
+@app.errorhandler(Exception)
+def on_error(e):
+    # 브라우저에 스택트레이스 그대로 노출 (진단용)
+    tb = traceback.format_exc()
+    return Response(f"[500] {type(e).__name__}: {e}\n\n{tb}",
+                    status=500, mimetype="text/plain; charset=utf-8")
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.get("/envcheck")
+def envcheck():
+    return {
+        "OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY")),
+        "DATABASE_URL_exists": bool(os.getenv("DATABASE_URL"))
+    }
+
+
 
 # 선택 의존성(없어도 동작)
 try:
