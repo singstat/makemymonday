@@ -1,6 +1,8 @@
 # --- 세션/DB 헬퍼 ---
 import time, uuid, os, psycopg2
-from flask import request, jsonify
+from flask import request, jsonify,Flask
+
+app = Flask(__name__)
 
 SESSIONS = {}  # {sid: {"created":ts,"last":ts,"facts":[...],"messages":[(...),...]}}
 DB_URL = os.getenv("DATABASE_URL")
