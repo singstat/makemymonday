@@ -202,13 +202,26 @@ def monday():
     else:
         reply = f"(echo) {q}"
 
-    # 2-4) 세션 메모리에 ‘전체’ 누적(LLM에는 최근 N턴만 보냈지만)
+    # 2-4) 세션 메모리에 ‘전체’ 누적
     if sid in SESSIONS:
         SESSIONS[sid]["last"] = time.time()
         append_msg(SESSIONS[sid], "user", q)
         append_msg(SESSIONS[sid], "assistant", reply)
 
-    return Response(reply, mimetype="text/plain; charset=utf-8")
+        # 🔵 최근 4턴 추가 출력용 문자열 구성
+        recent_turns = SESSIONS[sid]["messages"][-8:]  # user/assistant 4쌍
+        convo_str = "\n\n[최근 대화 4턴]\n"
+        for role, text in recent_turns:
+            role_label = "나" if role == "user" else "먼데이"
+            convo_str += f"{role_label}: {text}\n"
+    else:
+        convo_str = ""
+
+    # 최종 응답 = LLM 답변 + 최근 대화
+    final_output = reply + convo_str
+
+    return Response(final_output, mimetype="text/plain; charset=utf-8")
+
 
 @app.post("/session/end")
 def session_end():
