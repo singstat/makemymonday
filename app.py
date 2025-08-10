@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
 
 KST = timezone(timedelta(hours=9))
-MAX_TURNS = 16  # 최근 턴 유지
+MAX_TURNS = 200
 SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
 
 
@@ -48,16 +48,6 @@ def load_recent_messages(limit=16):
         """, (limit,))
         return [(r, c) for r, c in cur.fetchall()]
 
-def build_system(facts:list[str])->str:
-    today = datetime.now(KST).strftime("%Y-%m-%d (%A) KST")
-    base = [
-        "너는 'Monday'. 짧고 명료, 건조한 냉소 10~30%.",
-        "요청 없으면 불필요한 피드백 금지. 필요 시 '피스.'",
-        f"오늘 날짜: {today}",
-        "아래 facts를 항상 준수:"
-    ] + [f"- {f}" for f in facts]
-    return "\n".join(base)
-
 def need_summarize(sess)->bool:
     return len(sess["messages"]) > SUMMARIZE_AFTER
 
@@ -74,17 +64,29 @@ def summarize_history(client, sess):
     # 최근 턴만 남기기
     sess["messages"] = sess["messages"][-MAX_TURNS:]
 
+def build_system(facts:list[str])->str:
+    today = datetime.now(KST).strftime("%Y-%m-%d (%A) KST")
+    base = [
+        "너는 'Monday'. 짧고 명료, 건조한 냉소 10~30%.",
+        "요청 없으면 불필요한 피드백 금지. 필요 시 '피스.'",
+        f"오늘 날짜: {today}",
+        "아래 facts를 항상 준수:"
+    ] + [f"- {f}" for f in facts]
+    return "\n".join(base)
+
 def build_messages_for_llm(sess, user_q:str, facts:list[str]):
     msgs = []
     msgs.append({"role":"system","content": build_system(facts)})
-    if sess.get("summary"):
-        msgs.append({"role":"system","content": "이전 대화 요약:\n"+sess["summary"]})
-    # 과거 대화(최근만)
-    for role, content in sess["messages"]:
+    # 세션 요약 쓰려면 여기서 sess.get("summary") 추가 가능(지금은 안 씀)
+    # 최근 N턴만 LLM에 전달 (세션 메모리는 전체 유지)
+    for role, content in sess.get("messages", [])[-MAX_TURNS:]:
         msgs.append({"role": role, "content": content})
-    # 이번 사용자 입력
     msgs.append({"role":"user","content": user_q})
     return msgs
+
+def append_msg(sess:dict, role:str, text:str):
+    if "messages" not in sess: sess["messages"] = []
+    sess["messages"].append((role, text))
 
 @app.errorhandler(Exception)
 def on_error(e):
@@ -157,18 +159,24 @@ def ui():
 
 @app.post("/session/start")
 def session_start():
-    # ... 기존 코드 ...
-    SESSIONS[sid] = {"created": now, "last": now, "facts": facts, "messages": []}
-    # 🔹 과거 대화 이어받기 (선택: 최근 16턴)
-    try:
-        SESSIONS[sid]["messages"] = load_recent_messages(limit=16)
-    except Exception as _:
-        pass
+    extra = []
+    if request.is_json:
+        extra = [str(x) for x in (request.json.get("facts") or []) if x]
+    facts = load_facts_from_db() + extra
+    sid = uuid.uuid4().hex
+    now = time.time()
+    SESSIONS[sid] = {
+        "created": now, "last": now,
+        "facts": facts,
+        "messages": []  # ← 메모리 로그는 여기 누적
+        # "summary": ""  # 요약 쓰고 싶으면 나중에 추가
+    }
     return jsonify({"session_id": sid, "facts_count": len(facts)})
 
 
 @app.route("/monday", methods=["GET","POST"])
 def monday():
+    # 2-1) 입력 읽기
     sid = request.args.get("sid") or (request.get_json(silent=True) or {}).get("sid")
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
@@ -178,37 +186,27 @@ def monday():
     if not q:
         q = "상태 체크. 불필요한 말 없이 한 문장."
 
-    # 세션 확보
-    sess = SESSIONS.get(sid)
-    if not sess:
-        # 세션이 없으면 임시 세션처럼 동작
-        facts = load_facts_from_db()
-        sess = {"messages": [], "summary": ""}
-    else:
-        facts = sess.get("facts", [])
+    # 2-2) 세션 확보(없으면 임시 세션처럼 동작)
+    sess = SESSIONS.get(sid) or {"facts": load_facts_from_db(), "messages": []}
+    facts = sess.get("facts", [])
 
-    # 길어지면 앞부분 요약
+    # 2-3) LLM 호출(세션 메모리 ‘최근 N턴’ + facts 조합)
     api_key = os.getenv("OPEN_AI_KEY")
     client = OpenAI(api_key=api_key) if (OpenAI and api_key) else None
-    if client and need_summarize(sess):
-        summarize_history(client, sess)
-
-    # LLM 호출(세션 로그 전부 포함)
     if client:
-        llm_input = client.responses.create(
+        resp = client.responses.create(
             model="gpt-4o-mini",
-            input=build_messages_for_llm(sess, q, facts)
+            input= build_messages_for_llm(sess, q, facts)
         )
-        reply = (llm_input.output_text or "").strip() or "(빈 응답)"
+        reply = (resp.output_text or "").strip() or "(빈 응답)"
     else:
         reply = f"(echo) {q}"
 
-    # 세션에 기록
+    # 2-4) 세션 메모리에 ‘전체’ 누적(LLM에는 최근 N턴만 보냈지만)
     if sid in SESSIONS:
-        sess["last"] = time.time()
-        sess["messages"].append(("user", q))
-        sess["messages"].append(("assistant", reply))
-        SESSIONS[sid] = sess
+        SESSIONS[sid]["last"] = time.time()
+        append_msg(SESSIONS[sid], "user", q)
+        append_msg(SESSIONS[sid], "assistant", reply)
 
     return Response(reply, mimetype="text/plain; charset=utf-8")
 
