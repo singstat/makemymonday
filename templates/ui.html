@@ -5,6 +5,11 @@
     <title>Monday is my day.</title>
 </head>
 <body>
-<script src="{{ url_for('static', filename='main.js') }}"></script>
+    <h1>Monday UI Test</h1>
+    <input type="text" id="userInput" placeholder="Type here">
+    <button onclick="sendMessage()">Send</button>
+    <div id="response"></div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
