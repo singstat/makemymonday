@@ -2,11 +2,11 @@ import os, time, uuid
 from flask import Flask, request, jsonify, Response, render_template
 import traceback, logging
 from datetime import datetime, timedelta, timezone
+app = Flask(__name__, template_folder="templates", static_folder="static")
 
 logging.basicConfig(level=logging.INFO)
 app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
 KST = timezone(timedelta(hours=9))
 MAX_TURNS = 16  # 최근 턴 유지
 SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
