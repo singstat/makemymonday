@@ -1,15 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Monday is my day.</title>
-</head>
-<body>
-    <h1>Monday UI Test</h1>
-    <input type="text" id="userInput" placeholder="Type here">
-    <button onclick="sendMessage()">Send</button>
-    <div id="response"></div>
-
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
-</body>
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>Monday UI</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,Arial;margin:40px;max-width:680px}
+.row{display:flex;gap:8px}
+input,textarea{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px}
+button{padding:10px 16px;border:0;border-radius:8px;background:#111;color:#fff;font-weight:700;cursor:pointer}
+pre{background:#0f172a;color:#e5e7eb;padding:12px;border-radius:8px;white-space:pre-wrap}
+small{color:#666}
+</style>
+<h1>Monday UI</h1>
+<div class="row">
+  <input id="userInput" placeholder="여기에 입력">
+  <button id="send">Send</button>
+</div>
+<small id="sidView"></small>
+<h3>응답</h3>
+<pre id="out">여기에 답변이 표시됩니다.</pre>
+<script src="{{ url_for('static', filename='main.js') }}"></script>
 </html>
