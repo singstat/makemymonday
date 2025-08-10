@@ -81,3 +81,13 @@ from flask import render_template
 @app.get("/ui")
 def ui():
     return render_template("ui.html")
+
+@app.post("/monday")
+def monday():
+    content = request.get_json()
+    user_message = content.get("message", "")
+
+    # 여기에 Monday 로직 호출
+    reply = f"네가 보낸 말: {user_message}"  # 테스트용
+
+    return jsonify({"reply": reply})

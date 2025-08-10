@@ -1,5 +1,14 @@
-const r = await fetch('/monday_stream?q='+encodeURIComponent(msg));
-const reader = r.body.getReader(); let t='';
-for await (const ch of (async function*(){for(;;){const {done,value}=await reader.read();if(done)break;yield value}})()){
-  t += new TextDecoder().decode(ch); out.textContent = t;
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const out = document.getElementById('response');
+  const msg = (input.value || '').trim();
+  out.textContent = '…응답 대기중';
+
+  try {
+    const res = await fetch('/monday?q=' + encodeURIComponent(msg || '상태 체크. 불필요한 말 없이 한 문장.'));
+    const text = await res.text();
+    out.textContent = text || '(빈 응답)';
+  } catch (e) {
+    out.textContent = '[ERROR] ' + e;
+  }
 }
