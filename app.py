@@ -1,12 +1,53 @@
 import os, time, uuid
 from flask import Flask, request, jsonify, Response, render_template
-
-# 템플릿/정적 경로 명시 (경로 꼬임 방지)
-app = Flask(__name__, template_folder="templates", static_folder="static")
-# 맨 위 import 옆에 추가
 import traceback, logging
+from datetime import datetime, timedelta, timezone
+
 logging.basicConfig(level=logging.INFO)
 app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
+
+app = Flask(__name__, template_folder="templates", static_folder="static")
+KST = timezone(timedelta(hours=9))
+MAX_TURNS = 16  # 최근 턴 유지
+SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
+
+def build_system(facts:list[str])->str:
+    today = datetime.now(KST).strftime("%Y-%m-%d (%A) KST")
+    base = [
+        "너는 'Monday'. 짧고 명료, 건조한 냉소 10~30%.",
+        "요청 없으면 불필요한 피드백 금지. 필요 시 '피스.'",
+        f"오늘 날짜: {today}",
+        "아래 facts를 항상 준수:"
+    ] + [f"- {f}" for f in facts]
+    return "\n".join(base)
+
+def need_summarize(sess)->bool:
+    return len(sess["messages"]) > SUMMARIZE_AFTER
+
+def summarize_history(client, sess):
+    """앞부분 요약해서 sess['summary']에 누적하고 messages는 최근 턴만 남김"""
+    hist_text = "\n".join(f"{r.upper()}: {t}" for r,t in sess["messages"][:-MAX_TURNS])
+    prompt = f"다음 대화를 5줄 이내 핵심만, 사실 위주로 요약:\n{hist_text}"
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        input=[{"role":"user","content":prompt}]
+    )
+    add = (resp.output_text or "").strip()
+    sess["summary"] = (sess.get("summary") or "") + ("\n" if sess.get("summary") else "") + add
+    # 최근 턴만 남기기
+    sess["messages"] = sess["messages"][-MAX_TURNS:]
+
+def build_messages_for_llm(sess, user_q:str, facts:list[str]):
+    msgs = []
+    msgs.append({"role":"system","content": build_system(facts)})
+    if sess.get("summary"):
+        msgs.append({"role":"system","content": "이전 대화 요약:\n"+sess["summary"]})
+    # 과거 대화(최근만)
+    for role, content in sess["messages"]:
+        msgs.append({"role": role, "content": content})
+    # 이번 사용자 입력
+    msgs.append({"role":"user","content": user_q})
+    return msgs
 
 @app.errorhandler(Exception)
 def on_error(e):
