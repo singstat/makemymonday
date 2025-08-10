@@ -11,6 +11,43 @@ KST = timezone(timedelta(hours=9))
 MAX_TURNS = 16  # 최근 턴 유지
 SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
 
+
+def db_conn():
+    import psycopg2, os
+    url = os.getenv("DATABASE_URL")
+    if not url: raise RuntimeError("DATABASE_URL missing")
+    return psycopg2.connect(url)
+
+def save_session_messages(sess):
+    """SESSIONS[sid]['messages'] -> messages 테이블에 일괄 저장"""
+    if not sess or not sess.get("messages"):
+        return 0
+    rows = []
+    today = datetime.now(KST).date()
+    now = datetime.now(KST)
+    for role, content in sess["messages"]:
+        # role은 'user' 또는 'assistant'로 저장
+        role_db = 'assistant' if role.lower().startswith('monday') else role
+        rows.append((role_db, content, today, now))
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO messages (role, content, day, created_at) VALUES (%s,%s,%s,%s)",
+            rows
+        )
+        conn.commit()
+    return len(rows)
+
+def load_recent_messages(limit=16):
+    """DB에서 최근 메시지 몇 개 불러와 세션에 복원 (오늘 위주, 부족하면 어제까지)"""
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT role, content FROM messages
+            WHERE created_at >= NOW() - INTERVAL '36 hours'
+            ORDER BY created_at ASC
+            LIMIT %s
+        """, (limit,))
+        return [(r, c) for r, c in cur.fetchall()]
+
 def build_system(facts:list[str])->str:
     today = datetime.now(KST).strftime("%Y-%m-%d (%A) KST")
     base = [
@@ -120,16 +157,15 @@ def ui():
 
 @app.post("/session/start")
 def session_start():
-    extra = []
-    if request.is_json:
-        extra = [str(x) for x in (request.json.get("facts") or []) if x]
-    facts = load_facts_from_db() + extra
-    sid = uuid.uuid4().hex
-    now = time.time()
+    # ... 기존 코드 ...
     SESSIONS[sid] = {"created": now, "last": now, "facts": facts, "messages": []}
+    # 🔹 과거 대화 이어받기 (선택: 최근 16턴)
+    try:
+        SESSIONS[sid]["messages"] = load_recent_messages(limit=16)
+    except Exception as _:
+        pass
     return jsonify({"session_id": sid, "facts_count": len(facts)})
 
-from datetime import datetime
 
 @app.route("/monday", methods=["GET","POST"])
 def monday():
@@ -183,4 +219,14 @@ def session_end():
     sess = SESSIONS.pop(sid, None)
     if not sess:
         return jsonify({"ok": False, "error":"no such session"}), 404
-    return jsonify({"ok": True, "messages": len(sess["messages"]), "facts": len(sess["facts"])})
+
+    saved = 0
+    try:
+        saved = save_session_messages(sess)
+    except Exception as _:
+        saved = 0
+
+    return jsonify({"ok": True,
+                    "messages_in_session": len(sess["messages"]),
+                    "saved_to_db": saved,
+                    "facts": len(sess["facts"])})
