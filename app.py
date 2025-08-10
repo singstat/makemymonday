@@ -15,19 +15,20 @@ SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
 def db_conn():
     import psycopg2, os
     url = os.getenv("DATABASE_URL")
-    if not url: raise RuntimeError("DATABASE_URL missing")
+    if not url:
+        raise RuntimeError("DATABASE_URL missing")
     return psycopg2.connect(url)
 
-def save_session_messages(sess):
-    """SESSIONS[sid]['messages'] -> messages 테이블에 일괄 저장"""
-    if not sess or not sess.get("messages"):
+def save_session_messages(sess) -> int:
+    """SESSIONS[sid]['messages']를 messages 테이블에 일괄 저장"""
+    msgs = sess.get("messages") or []
+    if not msgs:
         return 0
     rows = []
     today = datetime.now(KST).date()
     now = datetime.now(KST)
-    for role, content in sess["messages"]:
-        # role은 'user' 또는 'assistant'로 저장
-        role_db = 'assistant' if role.lower().startswith('monday') else role
+    for role, content in msgs:
+        role_db = "assistant" if role.lower().startswith("assistant") else role  # 안전
         rows.append((role_db, content, today, now))
     with db_conn() as conn, conn.cursor() as cur:
         cur.executemany(
@@ -37,15 +38,19 @@ def save_session_messages(sess):
         conn.commit()
     return len(rows)
 
-def load_recent_messages(limit=16):
-    """DB에서 최근 메시지 몇 개 불러와 세션에 복원 (오늘 위주, 부족하면 어제까지)"""
+def load_recent_messages(hours=36, limit=16):
+    """최근 N시간 내 메시지 최대 limit건 로드 (오래된→최신 순)"""
     with db_conn() as conn, conn.cursor() as cur:
-        cur.execute("""
-            SELECT role, content FROM messages
-            WHERE created_at >= NOW() - INTERVAL '36 hours'
+        cur.execute(
+            f"""
+            SELECT role, content
+            FROM messages
+            WHERE created_at >= NOW() - INTERVAL '{int(hours)} hours'
             ORDER BY created_at ASC
             LIMIT %s
-        """, (limit,))
+            """,
+            (limit,)
+        )
         return [(r, c) for r, c in cur.fetchall()]
 
 def need_summarize(sess)->bool:
@@ -87,40 +92,6 @@ def build_messages_for_llm(sess, user_q:str, facts:list[str]):
 def append_msg(sess:dict, role:str, text:str):
     if "messages" not in sess: sess["messages"] = []
     sess["messages"].append((role, text))
-
-@app.errorhandler(Exception)
-def on_error(e):
-    # 브라우저에 스택트레이스 그대로 노출 (진단용)
-    tb = traceback.format_exc()
-    return Response(f"[500] {type(e).__name__}: {e}\n\n{tb}",
-                    status=500, mimetype="text/plain; charset=utf-8")
-
-@app.get("/health")
-def health():
-    return {"ok": True}
-
-@app.get("/envcheck")
-def envcheck():
-    return {
-        "OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY")),
-        "DATABASE_URL_exists": bool(os.getenv("DATABASE_URL"))
-    }
-
-
-
-# 선택 의존성(없어도 동작)
-try:
-    import psycopg2
-except Exception:
-    psycopg2 = None
-
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
-
-SESSIONS = {}  # {sid: {"created":ts,"last":ts,"facts":[...],"messages":[(...),...]}}
-
 def load_facts_from_db():
     db_url = os.getenv("DATABASE_URL")
     if not (psycopg2 and db_url):
@@ -148,6 +119,25 @@ def ask_monday(msg: str, facts: list[str]) -> str:
             return f"[OpenAI ERROR] {err}"
     return f"(echo) {msg}"
 
+@app.errorhandler(Exception)
+def on_error(e):
+    # 브라우저에 스택트레이스 그대로 노출 (진단용)
+    tb = traceback.format_exc()
+    return Response(f"[500] {type(e).__name__}: {e}\n\n{tb}",
+                    status=500, mimetype="text/plain; charset=utf-8")
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+@app.get("/envcheck")
+def envcheck():
+    return {
+        "OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY")),
+        "DATABASE_URL_exists": bool(os.getenv("DATABASE_URL"))
+    }
+
+
 @app.get("/")
 def home():
     return "Monday minimal server"
@@ -168,10 +158,15 @@ def session_start():
     SESSIONS[sid] = {
         "created": now, "last": now,
         "facts": facts,
-        "messages": []  # ← 메모리 로그는 여기 누적
-        # "summary": ""  # 요약 쓰고 싶으면 나중에 추가
+        "messages": []
     }
+    # 🔹 최근 대화 복원 (필요하면 hours/limit 조절)
+    try:
+        SESSIONS[sid]["messages"] = load_recent_messages(hours=36, limit=16)
+    except Exception:
+        pass
     return jsonify({"session_id": sid, "facts_count": len(facts)})
+
 
 
 @app.route("/monday", methods=["GET","POST"])
