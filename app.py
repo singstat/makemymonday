@@ -17,6 +17,43 @@ def load_facts_from_db() -> list[str]:
     except Exception as _:
         return []
 
+@app.get("/")
+def home():
+    return "Monday server running"
+
+@app.get("/ui")
+def ui():
+    return render_template("ui.html")
+
+@app.route("/monday", methods=["GET", "POST"])
+def monday():
+    # sid 체크
+    sid = request.args.get("sid") or (request.get_json(silent=True) or {}).get("sid")
+    if sid in SESSIONS:
+        SESSIONS[sid]["last"] = time.time()
+
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        q = (data.get("message") or "").strip()
+    else:
+        q = (request.args.get("q") or "").strip()
+
+    if not q:
+        q = "상태 체크. 불필요한 말 없이 한 문장."
+
+    # 대화 기록 저장
+    if sid in SESSIONS:
+        SESSIONS[sid]["messages"].append(("user", q))
+
+    # 실제 Monday 호출 (임시로 에코)
+    reply = f"네가 보낸 말: {q}"
+
+    if sid in SESSIONS:
+        SESSIONS[sid]["messages"].append(("monday", reply))
+
+    return reply
+
+
 @app.post("/session/start")
 def session_start():
     # 클라이언트가 추가로 보내온 임시 세션 팩트(선택)
