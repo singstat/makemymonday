@@ -8,64 +8,95 @@
   const sid = (document.cookie.match(/(?:^|;\s*)sid=([^;]+)/) || [,''])[1];
   if ($sid) $sid.textContent = sid ? `sid: ${sid}` : '';
 
-  // 서버 기록 + 이번 세션 신규 기록(업로드 대기)
-  const messages = [];   // {text, ts}
-  let queue = [];        // {text, ts} (서버 미전송분)
+  const messages = []; // [{role: 'user'|'assistant', text, ts}]
+  let queue = [];      // 업로드 대기
 
-  const normTs = (t) => {
-    const n = Number(t || Date.now());
-    return n < 1e12 ? n * 1000 : n; // sec → ms 보정
-  };
-
+  const pad2 = (n) => String(n).padStart(2, '0');
   const formatKST = (tsMs) => {
+    const d = new Date(tsMs);
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Seoul',
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hour12: false
-    }).formatToParts(new Date(tsMs));
-    const get = (type) => parts.find(p => p.type === type)?.value || '';
+    }).formatToParts(d);
+    const get = (t) => parts.find(p => p.type === t)?.value || '';
     return `${get('year')} ${get('month')} ${get('day')} ${get('hour')} ${get('minute')}`;
   };
 
   const render = () => {
-    $out.textContent = messages.map(m => `${m.text} ${formatKST(m.ts)}`).join('\n');
+    $out.textContent = messages.map(m =>
+      (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`)
+    ).join('\n');
   };
 
+  // 서버 히스토리 불러오기
   async function loadHistory() {
     try {
       const res = await fetch(`/api/messages?sid=${encodeURIComponent(sid)}`, { credentials: 'same-origin' });
       const data = await res.json();
       if (data?.ok && Array.isArray(data.items)) {
         messages.splice(0, messages.length, ...data.items.map(it => ({
-          text: String(it.text || '').trim(),
-          ts: normTs(it.ts)
+          role: it.role === 'assistant' ? 'assistant' : 'user',
+          text: String(it.text || ''),
+          ts: Number(it.ts || Date.now())
         })));
         render();
       }
-    } catch { /* noop */ }
+    } catch {}
   }
 
-  function handleSubmit(e) {
+  // Chat 호출
+  async function askMonday(promptKST) {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ prompt: promptKST })
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok) throw new Error(data?.error || 'chat failed');
+    return data.reply;
+  }
+
+  async function handleSubmit(e) {
     e?.preventDefault?.();
     if (e?.type === 'keydown' && e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) return;
 
-    const text = ($input.value || '').trim();
-    if (!text) return;
+    const raw = ($input.value || '').trim();
+    if (!raw) return;
 
-    const item = { text, ts: Date.now() }; // ts는 UTC 기준 ms, 표시만 KST로 포맷
-    messages.push(item); // 화면 누적
-    queue.push(item);    // 서버 업로드 대기
+    const ts = Date.now();
+    const withKST = `${raw} ${formatKST(ts)}`;
+
+    // 로컬 누적 (user)
+    const u = { role: 'user', text: withKST, ts };
+    messages.push(u);
+    queue.push(u);
     render();
 
+    // 입력창 비움
     $input.value = '';
     $input.focus();
+
+    // 서버로 프록시 호출 → 답변 로컬 누적 (assistant)
+    try {
+      const reply = await askMonday(withKST);
+      const a = { role: 'assistant', text: reply, ts: Date.now() };
+      messages.push(a);
+      queue.push(a);
+      render();
+    } catch (err) {
+      const a = { role: 'assistant', text: `(에러) ${err.message || err}`, ts: Date.now() };
+      messages.push(a);
+      queue.push(a);
+      render();
+    }
   }
 
   function flushQueueBeacon() {
     if (!queue.length) return true;
     const payload = JSON.stringify({ sid, items: queue });
     let ok = false;
-
     if (navigator.sendBeacon) {
       const blob = new Blob([payload], { type: 'application/json' });
       ok = navigator.sendBeacon('/api/messages', blob);
@@ -86,9 +117,11 @@
     return ok;
   }
 
+  // 바인딩
   $input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(e); });
   $send.addEventListener('click', handleSubmit);
 
+  // 페이지 이탈 시 업로드
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushQueueBeacon();
   });
