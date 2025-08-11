@@ -4,6 +4,11 @@ from flask import Flask, render_template, request, jsonify, make_response
 import redis
 from openai import OpenAI
 
+import re
+from datetime import datetime, timezone, timedelta
+KST = timezone(timedelta(hours=9))
+STAMP_RE = re.compile(r'\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$')
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.url_map.strict_slashes = False
 
@@ -79,16 +84,44 @@ def save_messages_batch():
 @app.post("/api/chat")
 def chat():
     data = request.get_json(silent=True) or {}
-    prompt = (data.get("prompt") or "").strip()
-    if not prompt: return jsonify({"ok": False, "error": "empty prompt"}), 400
+    raw = (data.get("prompt") or "").strip()
+    if not raw:
+        return jsonify({"ok": False, "error": "empty prompt"}), 400
+
+    # 끝에 붙은 "YYYY MM DD HH mm" (KST) 추출 → system에 현재시각으로 전달
+    user_text = raw
+    now_kst_str = None
+    m = STAMP_RE.search(raw)
+    if m:
+        y, mo, d, h, mi = map(int, m.groups())
+        try:
+            dt_kst = datetime(y, mo, d, h, mi, tzinfo=KST)
+            now_kst_str = dt_kst.strftime("%Y-%m-%d %H:%M KST")
+            user_text = STAMP_RE.sub("", raw).rstrip()  # 숫자는 본문에서 제거
+        except ValueError:
+            now_kst_str = None  # 잘못된 날짜면 무시
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Monday. Answer concisely in Korean when appropriate. "
+                "If the current datetime is provided below, treat all relative dates "
+                "like '오늘/어제/이번 주' based on it."
+            ),
+        },
+    ]
+    if now_kst_str:
+        messages.append({
+            "role": "system",
+            "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'.",
+        })
+    messages.append({"role": "user", "content": user_text})
 
     try:
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are Monday. Answer concisely in Korean when appropriate."},
-                {"role": "user", "content": prompt}
-            ],
+            messages=messages,
             temperature=0.7,
         )
         reply = (res.choices[0].message.content or "").strip()
