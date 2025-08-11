@@ -23,6 +23,7 @@ MAX_ITEMS = 1000
 TTL_SECONDS = 60*60*24*30
 KST = timezone(timedelta(hours=9))
 STAMP_RE = re.compile(r'\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$')
+SUMMARY_KIND = "summary"
 
 # (참고) 입력 토큰 예산 — 서버에서도 안전차단(대략치)
 BUDGET_TOKENS = 8000
@@ -61,59 +62,85 @@ def home():
     resp.set_cookie("sid", sid, max_age=TTL_SECONDS, samesite="Lax")
     return resp
 
+# /api/messages (GET) — kind 보존, summary는 text 비어도 통과
 @app.get("/api/messages")
 def list_messages():
-    """Redis에 저장된 모든 항목을 그대로 반환 (hidden 포함)"""
     sid = request.args.get("sid") or request.cookies.get("sid")
-    if not sid: return jsonify({"ok": False, "error": "no sid"}), 400
+    if not sid:
+        return jsonify({"ok": False, "error": "no sid"}), 400
 
     raw = r.lrange(key_for(sid), 0, -1)
     items = []
-    now_ms = int(time.time()*1000)
+    now_ms = int(time.time() * 1000)
     for s in raw:
         try:
             it = json.loads(s)
         except Exception:
             continue
+
         role = it.get("role")
+        kind = it.get("kind")  # <-- 추가
         text = (it.get("text") or "").strip()
-        if role not in ("user", "assistant") or not text:
-            continue
         ts = int(it.get("ts") or now_ms)
-        if ts < 1_000_000_000_000: ts *= 1000
+        if ts < 1_000_000_000_000:
+            ts *= 1000
         hidden = bool(it.get("hidden", False))
-        items.append({"role": role, "text": text, "ts": ts, "hidden": hidden})
+
+        # summary는 빈 문자열 허용, 그 외는 기존 규칙 유지
+        if kind == SUMMARY_KIND:
+            if role is None:
+                role = "system"
+        else:
+            if role not in ("user", "assistant") or not text:
+                continue
+
+        items.append({"role": role, "text": text, "ts": ts, "hidden": hidden, "kind": kind})
     return jsonify({"ok": True, "items": items})
 
+
+# /api/messages (POST) — kind 보존, summary는 빈 문자열 허용 + 항상 hidden 취급
 @app.post("/api/messages")
 def save_messages_batch():
-    """
-    페이지 이탈 시 업로드. 항목 하나하나에 hidden 플래그가 있을 수 있음.
-    body: { sid, items: [{role, text, ts, hidden?}, ...] }
-    """
     data = request.get_json(silent=True)
     if data is None:
-        try: data = json.loads(request.data.decode("utf-8"))
-        except Exception: return jsonify({"ok": False, "error": "bad json"}), 400
+        try:
+            data = json.loads(request.data.decode("utf-8"))
+        except Exception:
+            return jsonify({"ok": False, "error": "bad json"}), 400
 
     sid = data.get("sid") or request.cookies.get("sid")
     items = data.get("items")
-    if not sid or not isinstance(items, list): return jsonify({"ok": True, "saved": 0})
+    if not sid or not isinstance(items, list):
+        return jsonify({"ok": True, "saved": 0})
 
     payloads = []
-    now_ms = int(time.time()*1000)
+    now_ms = int(time.time() * 1000)
+
     for it in items:
         role = it.get("role")
+        kind = it.get("kind")
         text = (str(it.get("text") or "")).strip()
-        if role not in ("user", "assistant") or not text:
-            continue
-        try: ts = int(it.get("ts") or now_ms)
-        except Exception: ts = now_ms
-        if ts < 1_000_000_000_000: ts *= 1000
-        hidden = bool(it.get("hidden", False))
-        payloads.append(json.dumps({"role": role, "text": text, "ts": ts, "hidden": hidden}))
+        try:
+            ts = int(it.get("ts") or now_ms)
+        except Exception:
+            ts = now_ms
+        if ts < 1_000_000_000_000:
+            ts *= 1000
 
-    if not payloads: return jsonify({"ok": True, "saved": 0})
+        if kind == SUMMARY_KIND:
+            # 요약은 빈 텍스트 허용 + 항상 hidden 취급
+            if role is None:
+                role = "system"
+            hidden = True
+        else:
+            hidden = bool(it.get("hidden", False))
+            if role not in ("user", "assistant") or not text:
+                continue
+
+        payloads.append(json.dumps({"role": role, "text": text, "ts": ts, "hidden": hidden, "kind": kind}))
+
+    if not payloads:
+        return jsonify({"ok": True, "saved": 0})
 
     k = key_for(sid)
     with r.pipeline() as p:
@@ -123,65 +150,27 @@ def save_messages_batch():
         p.execute()
     return jsonify({"ok": True, "saved": len(payloads)})
 
+
+# /api/chat — summary는 컨텍스트에서 제외(혹시 hidden이 false여도 가드)
 @app.post("/api/chat")
 def chat():
-    """
-    클라에서 온 history를 컨텍스트로 사용.
-    - 클라는 이미 토큰 예산을 맞춰 visible/hidden 분리하지만
-      서버에서도 한번 더 토큰 예산 방어적으로 적용.
-    - user 텍스트의 KST 스탬프는 제거해 system now로 전달.
-    """
     data = request.get_json(silent=True) or {}
     raw_prompt = (data.get("prompt") or "").strip()
     history = data.get("history") or []
 
-    # visible만 추려서 토큰 예산 내 잘라 사용
-    hist = [{"role": ("assistant" if h.get("role")=="assistant" else "user"),
-             "text": str(h.get("text") or ""),
-             "ts": int(h.get("ts") or 0)}
-            for h in history if not h.get("hidden")]
+    # visible & non-summary만 컨텍스트로
+    hist = []
+    for h in history:
+        if h.get("hidden"):  # hidden 제외
+            continue
+        if h.get("kind") == SUMMARY_KIND:  # 요약 제외
+            continue
+        role = "assistant" if h.get("role") == "assistant" else "user"
+        hist.append({"role": role, "text": str(h.get("text") or ""), "ts": int(h.get("ts") or 0)})
 
-    hist = truncate_by_tokens(hist)
+    # 이하 기존 로직(스탬프 제거/now 전달/토큰 트렁케이션)이 그대로라면 유지
+    # ...
 
-    # now 시각 추출: 마지막 user에서 스탬프 제거 시도 → 없으면 prompt에서
-    now_kst_str = None
-    for i in range(len(hist)-1, -1, -1):
-        if hist[i]["role"] == "user":
-            cleaned, now_str = _strip_kst_stamp(hist[i]["text"])
-            hist[i]["text"] = cleaned
-            if now_str: now_kst_str = now_str
-            break
-    if not now_kst_str and raw_prompt:
-        _, now2 = _strip_kst_stamp(raw_prompt)
-        if now2: now_kst_str = now2
-
-    msgs = [{
-        "role": "system",
-        "content": (
-            "You are Monday. Answer concisely in Korean when appropriate. "
-            "If a current datetime is provided, interpret relative dates like "
-            "'오늘/어제/이번 주' based on it."
-        ),
-    }]
-    if now_kst_str:
-        msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
-    for it in hist:
-        msgs.append({"role": it["role"], "content": it["text"]})
-    if not hist and raw_prompt:
-        # 히스토리 없으면 프롬프트만 사용 (스탬프 제거는 위에서 처리)
-        cleaned, _ = _strip_kst_stamp(raw_prompt)
-        msgs.append({"role": "user", "content": cleaned})
-
-    try:
-        res = oa.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=msgs,
-            temperature=0.7,
-        )
-        reply = (res.choices[0].message.content or "").strip()
-        return jsonify({"ok": True, "reply": reply})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.get("/health")
 def health():
