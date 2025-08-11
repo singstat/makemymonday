@@ -250,7 +250,7 @@ def handle_exception(e):
         return jsonify({"ok": False, "error": str(e)}), 500
     raise e  # 페이지 라우트는 기존대로
 
-@@app.errorhandler(Exception)
+@app.errorhandler(Exception)
 def handle_any_exception(e):
     app.logger.exception("Error at %s", request.path)
     # /api/* 요청은 항상 JSON으로 반환
