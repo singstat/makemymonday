@@ -1,9 +1,13 @@
 console.log('main.js loaded');
 
-let SID = null;
+let SID = sessionStorage.getItem('SID') || null;
+const $btn = document.getElementById('send');
+const $input = document.getElementById('userInput');
+const $out = document.getElementById('out');
+const $sid = document.getElementById('sidView');
 
-// 세션 시작
 async function startSession(){
+  if (SID) { if ($sid) $sid.textContent = 'sid=' + SID; return; } // 이미 있으면 재사용
   try{
     const r = await fetch('/session/start', {
       method:'POST',
@@ -12,11 +16,55 @@ async function startSession(){
     });
     const j = await r.json();
     SID = j.session_id;
-    const sidView = document.getElementById('sidView');
-    if (sidView) sidView.textContent = 'sid=' + SID + ' (facts ' + j.facts_count + ')';
+    sessionStorage.setItem('SID', SID);           // 🔵 저장
+    if ($sid) $sid.textContent = 'sid=' + SID + ' (facts ' + j.facts_count + ')';
     console.log('session started', SID);
-  }catch(e){ console.error('session start failed', e); }
+    $btn?.removeAttribute('disabled');
+  }catch(e){
+    console.error('session start failed', e);
+    $out.textContent = '[ERROR] 세션 생성 실패';
+  }
 }
+
+async function ensureSession(){
+  if (!SID) { $btn?.setAttribute('disabled',''); await startSession(); }
+  return !!SID;
+}
+
+async function sendMessage(){
+  if (!(await ensureSession())) return;           // 🔵 보장
+  const msg = ($input?.value || '').trim();
+  if (!msg) return;
+  $out.textContent = '…전송 중';
+  try{
+    const res = await fetch('/monday', {          // 🔵 항상 sid 포함
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ sid: SID, message: msg })
+    });
+    const text = await res.text();
+    $out.textContent = text || '(빈 응답)';
+  }catch(e){
+    $out.textContent = '[ERROR] ' + e;
+  }
+  if ($input) $input.value = '';
+}
+
+// 초기화
+window.addEventListener('DOMContentLoaded', async ()=>{
+  $btn?.setAttribute('disabled','');             // 세션 전에 버튼 비활성화
+  await startSession();
+});
+window.addEventListener('beforeunload', ()=>{
+  if (!SID) return;
+  const body = new Blob([JSON.stringify({session_id: SID})], {type:'application/json'});
+  navigator.sendBeacon('/session/end', body);
+});
+$btn?.addEventListener('click', sendMessage);
+$input?.addEventListener('keydown', e=>{
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
 
 // 페이지 닫힐 때 세션 종료
 function endSession(){
