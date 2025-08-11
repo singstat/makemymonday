@@ -225,6 +225,43 @@ def chat():
         app.logger.exception("chat failed")
         return jsonify({"ok": False, "error": str(e)}), 500
 
+# app.py 에 추가
+@app.post("/api/purge_hidden")
+def purge_hidden():
+    """
+    요약이 아닌 hidden 항목을 모두 삭제.
+    body: { sid? }  (없으면 쿠키 sid 사용)
+    """
+    data = request.get_json(silent=True) or {}
+    sid = data.get("sid") or request.cookies.get("sid")
+    if not sid:
+        return jsonify({"ok": False, "error": "no sid"}), 400
+
+    k = key_for(sid)
+    raw = r.lrange(k, 0, -1)
+    kept, removed = [], 0
+    for s in raw:
+        try:
+            it = json.loads(s)
+        except Exception:
+            # 파싱 실패한 건 보수적으로 보존
+            kept.append(s)
+            continue
+        if bool(it.get("hidden", False)) and it.get("kind") != SUMMARY_KIND:
+            removed += 1
+            continue
+        kept.append(json.dumps(it))
+
+    with r.pipeline() as p:
+        p.delete(k)
+        if kept:
+            p.rpush(k, *kept)
+            p.expire(k, TTL_SECONDS)
+        p.execute()
+
+    return jsonify({"ok": True, "removed": removed, "kept": len(kept)})
+
+
 
 @app.get("/health")
 def health():
