@@ -3,55 +3,60 @@
   const $input = document.getElementById('userInput');
   const $send  = document.getElementById('send');
   const $out   = document.getElementById('out');
-  const $sid   = document.getElementById('sidView');
+  const $sidEl = document.getElementById('sidView');
 
+  // sid (쿠키)
   const sid = (document.cookie.match(/(?:^|;\s*)sid=([^;]+)/) || [,''])[1];
-  if ($sid) $sid.textContent = sid ? `sid: ${sid}` : '';
+  if ($sidEl) $sidEl.textContent = sid ? `sid: ${sid}` : '';
 
-  const messages = []; // [{role: 'user'|'assistant', text, ts}]
-  let queue = [];      // 업로드 대기
+  // 화면 누적 + 서버 업로드 대기 큐
+  const messages = []; // [{role:'user'|'assistant', text, ts}]
+  let queue = [];      // 페이지 이탈 시 /api/messages로 일괄 업로드
 
-  const pad2 = (n) => String(n).padStart(2, '0');
+  // KST 포맷 YYYY MM DD HH mm
   const formatKST = (tsMs) => {
-    const d = new Date(tsMs);
     const parts = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Seoul',
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hour12: false
-    }).formatToParts(d);
+    }).formatToParts(new Date(tsMs));
     const get = (t) => parts.find(p => p.type === t)?.value || '';
     return `${get('year')} ${get('month')} ${get('day')} ${get('hour')} ${get('minute')}`;
   };
 
   const render = () => {
     $out.textContent = messages.map(m =>
-      (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`)
+      m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`
     ).join('\n');
   };
 
-  // 서버 히스토리 불러오기
+  // 서버 히스토리 로딩 (이전 세션에서 업로드된 것만)
   async function loadHistory() {
     try {
       const res = await fetch(`/api/messages?sid=${encodeURIComponent(sid)}`, { credentials: 'same-origin' });
       const data = await res.json();
       if (data?.ok && Array.isArray(data.items)) {
-        messages.splice(0, messages.length, ...data.items.map(it => ({
+        const normalized = data.items.map(it => ({
           role: it.role === 'assistant' ? 'assistant' : 'user',
           text: String(it.text || ''),
           ts: Number(it.ts || Date.now())
-        })));
+        }));
+        messages.splice(0, messages.length, ...normalized);
         render();
       }
-    } catch {}
+    } catch (e) {
+      console.error('loadHistory failed', e);
+    }
   }
 
-  // Chat 호출
+  // Chat 프록시 호출 (현재 세션 로그 동봉)
   async function askMonday(promptKST) {
+    const history = messages.map(m => ({ role: m.role, text: m.text, ts: m.ts }));
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ prompt: promptKST })
+      body: JSON.stringify({ prompt: promptKST, history })
     });
     const data = await res.json();
     if (!res.ok || !data?.ok) throw new Error(data?.error || 'chat failed');
@@ -60,6 +65,7 @@
 
   async function handleSubmit(e) {
     e?.preventDefault?.();
+    // 한글 IME 조합 중 Enter 무시
     if (e?.type === 'keydown' && e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) return;
 
     const raw = ($input.value || '').trim();
@@ -78,7 +84,7 @@
     $input.value = '';
     $input.focus();
 
-    // 서버로 프록시 호출 → 답변 로컬 누적 (assistant)
+    // 서버 호출 → 답변 로컬 누적 (assistant)
     try {
       const reply = await askMonday(withKST);
       const a = { role: 'assistant', text: reply, ts: Date.now() };
@@ -93,10 +99,12 @@
     }
   }
 
+  // 페이지 이탈 시 일괄 업로드
   function flushQueueBeacon() {
     if (!queue.length) return true;
     const payload = JSON.stringify({ sid, items: queue });
     let ok = false;
+
     if (navigator.sendBeacon) {
       const blob = new Blob([payload], { type: 'application/json' });
       ok = navigator.sendBeacon('/api/messages', blob);
@@ -121,13 +129,13 @@
   $input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(e); });
   $send.addEventListener('click', handleSubmit);
 
-  // 페이지 이탈 시 업로드
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushQueueBeacon();
   });
   window.addEventListener('pagehide', flushQueueBeacon);
   window.addEventListener('beforeunload', flushQueueBeacon);
 
+  // 초기화
   loadHistory();
   $input.focus();
 })();
