@@ -5,6 +5,10 @@ from flask import Flask, render_template, request, jsonify, make_response
 import redis
 from openai import OpenAI
 
+import logging, traceback
+from werkzeug.exceptions import HTTPException
+logging.basicConfig(level=logging.INFO)
+
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.url_map.strict_slashes = False
 
@@ -180,7 +184,6 @@ def health():
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
-from werkzeug.exceptions import HTTPException
 
 @app.errorhandler(404)
 def handle_404(e):
@@ -197,6 +200,19 @@ def handle_exception(e):
         return jsonify({"ok": False, "error": str(e)}), 500
     raise e  # 페이지 라우트는 기존대로
 
+@app.errorhandler(Exception)
+def handle_any_exception(e):
+    # 서버 로그에 스택 추적 남기기
+    app.logger.exception("API error at %s", request.path)
+
+    # /api/* 요청은 항상 JSON으로 응답
+    if request.path.startswith("/api/"):
+        if isinstance(e, HTTPException):
+            return jsonify({"ok": False, "error": e.description, "code": e.code}), e.code
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    # 페이지 라우트는 기존 동작 유지(HTML 에러 페이지)
+    raise e
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
