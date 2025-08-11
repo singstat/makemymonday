@@ -264,3 +264,11 @@ def debug_tables():
         cur.execute("select count(*) from messages;")
         n = cur.fetchone()[0]
     return {"tables": tables, "messages_count": n}
+
+
+from flask import Response
+
+@app.get("/ui")
+def ui():
+    return Response("<!doctype html><meta charset=utf-8><h1>UI OK</h1>",
+                    mimetype="text/html; charset=utf-8")
