@@ -11,8 +11,8 @@ if not REDIS_URL:
     raise RuntimeError("환경변수 REDIS_URL 이 필요합니다. (예: redis://default:pass@host:port)")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
-MAX_ITEMS = 1000      # 사용자별 최대 저장 개수
-TTL_SECONDS = 60*60*24*30  # 30일 보관
+MAX_ITEMS = 1000
+TTL_SECONDS = 60*60*24*30  # 30일
 
 def key_for(sid: str) -> str:
     return f"msgs:{sid}"
@@ -20,7 +20,7 @@ def key_for(sid: str) -> str:
 @app.get("/")
 def home():
     sid = request.cookies.get("sid") or uuid.uuid4().hex
-    resp = make_response(render_template("ui.html"))  # templates/ui.html
+    resp = make_response(render_template("ui.html"))
     resp.set_cookie("sid", sid, max_age=TTL_SECONDS, samesite="Lax")
     return resp
 
@@ -30,8 +30,7 @@ def list_messages():
     if not sid:
         return jsonify({"ok": False, "error": "no sid"}), 400
     k = key_for(sid)
-    items = r.lrange(k, 0, -1)  # 문자열 리스트
-    # 저장은 JSON 문자열로 하므로 파싱
+    items = r.lrange(k, 0, -1)
     out = []
     for s in items:
         try:
@@ -40,20 +39,48 @@ def list_messages():
             pass
     return jsonify({"ok": True, "items": out})
 
-@app.post("/api/message")
-def add_message():
-    data = request.get_json(silent=True) or {}
-    sid = request.cookies.get("sid") or data.get("sid")
-    text = (data.get("text") or "").strip()
-    if not sid or not text:
-        return jsonify({"ok": False, "error": "bad payload"}), 400
+@app.post("/api/messages")
+def save_messages_batch():
+    # sendBeacon 대응: text/plain로 올 수도 있어서 수동 파싱 보강
+    data = request.get_json(silent=True)
+    if data is None:
+        try:
+            data = json.loads(request.data.decode("utf-8"))
+        except Exception:
+            return jsonify({"ok": False, "error": "bad json"}), 400
+
+    sid = data.get("sid") or request.cookies.get("sid")
+    items = data.get("items")
+    if not sid or not isinstance(items, list):
+        return jsonify({"ok": True, "saved": 0})
+
+    now = int(time.time()*1000)
+    payloads = []
+    for it in items:
+        text = (it.get("text") or "").strip()
+        if not text:
+            continue
+        ts = int(it.get("ts") or now)
+        payloads.append(json.dumps({"text": text, "ts": ts}))
+    if not payloads:
+        return jsonify({"ok": True, "saved": 0})
 
     k = key_for(sid)
-    item = json.dumps({"text": text, "ts": int(time.time()*1000)})
-    # 리스트에 push, 길이 제한, TTL 갱신
     with r.pipeline() as p:
-        p.rpush(k, item)
-        p.ltrim(k, max(-MAX_ITEMS, -MAX_ITEMS), -1)  # 뒤에서 MAX_ITEMS 개만 유지
+        p.rpush(k, *payloads)
+        p.ltrim(k, -MAX_ITEMS, -1)  # 마지막 MAX_ITEMS개만 유지
         p.expire(k, TTL_SECONDS)
         p.execute()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "saved": len(payloads)})
+
+@app.get("/health")
+def health():
+    try:
+        r.ping()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+if __name__ == "__main__":
+    import os
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
