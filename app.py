@@ -158,22 +158,72 @@ def save_messages_batch():
 # /api/chat — summary는 컨텍스트에서 제외(혹시 hidden이 false여도 가드)
 @app.post("/api/chat")
 def chat():
-    data = request.get_json(silent=True) or {}
-    raw_prompt = (data.get("prompt") or "").strip()
-    history = data.get("history") or []
+    try:
+        data = request.get_json(silent=True) or {}
+        raw_prompt = (data.get("prompt") or "").strip()
+        history = data.get("history")
+        if not isinstance(history, list):
+            history = []
 
-    # visible & non-summary만 컨텍스트로
-    hist = []
-    for h in history:
-        if h.get("hidden"):  # hidden 제외
-            continue
-        if h.get("kind") == SUMMARY_KIND:  # 요약 제외
-            continue
-        role = "assistant" if h.get("role") == "assistant" else "user"
-        hist.append({"role": role, "text": str(h.get("text") or ""), "ts": int(h.get("ts") or 0)})
+        # history 정규화: dict만 받고, hidden/summary 는 컨텍스트 제외
+        clean_hist = []
+        for h in history:
+            if not isinstance(h, dict):
+                continue
+            if h.get("hidden") or h.get("kind") == "summary":
+                continue
+            role = "assistant" if h.get("role") == "assistant" else "user"
+            text = str(h.get("text") or "")
+            clean_hist.append({"role": role, "text": text})
 
-    # 이하 기존 로직(스탬프 제거/now 전달/토큰 트렁케이션)이 그대로라면 유지
-    # ...
+        # 기준 시각: 마지막 user의 스탬프 → 없으면 prompt의 스탬프
+        now_kst_str = None
+        for i in range(len(clean_hist) - 1, -1, -1):
+            if clean_hist[i]["role"] == "user":
+                cleaned, now_str = _strip_kst_stamp(clean_hist[i]["text"])
+                clean_hist[i]["text"] = cleaned
+                if now_str:
+                    now_kst_str = now_str
+                break
+        if not now_kst_str and raw_prompt:
+            _, now2 = _strip_kst_stamp(raw_prompt)
+            if now2:
+                now_kst_str = now2
+
+        # 히스토리 없으면 prompt를 user로 사용(스탬프 제거)
+        msgs = [{
+            "role": "system",
+            "content": (
+                "You are Monday. Answer concisely in Korean when appropriate. "
+                "If a current datetime is provided, interpret relative dates like "
+                "'오늘/어제/이번 주' based on it."
+            ),
+        }]
+        if now_kst_str:
+            msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
+
+        if clean_hist:
+            for it in clean_hist:
+                msgs.append({"role": it["role"], "content": it["text"]})
+        else:
+            if not raw_prompt:
+                return jsonify({"ok": False, "error": "empty prompt"}), 400
+            cleaned, _ = _strip_kst_stamp(raw_prompt)
+            msgs.append({"role": "user", "content": cleaned})
+
+        # OpenAI 호출
+        res = oa.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=msgs,
+            temperature=0.7,
+            timeout=30,  # Optional: 네트워크 보호
+        )
+        reply = (res.choices[0].message.content or "").strip()
+        return jsonify({"ok": True, "reply": reply})
+
+    except Exception as e:
+        app.logger.exception("chat failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.get("/health")
@@ -200,18 +250,15 @@ def handle_exception(e):
         return jsonify({"ok": False, "error": str(e)}), 500
     raise e  # 페이지 라우트는 기존대로
 
-@app.errorhandler(Exception)
+@@app.errorhandler(Exception)
 def handle_any_exception(e):
-    # 서버 로그에 스택 추적 남기기
-    app.logger.exception("API error at %s", request.path)
-
-    # /api/* 요청은 항상 JSON으로 응답
+    app.logger.exception("Error at %s", request.path)
+    # /api/* 요청은 항상 JSON으로 반환
     if request.path.startswith("/api/"):
         if isinstance(e, HTTPException):
             return jsonify({"ok": False, "error": e.description, "code": e.code}), e.code
         return jsonify({"ok": False, "error": str(e)}), 500
-
-    # 페이지 라우트는 기존 동작 유지(HTML 에러 페이지)
+    # 페이지 라우트는 기존 HTML 에러 유지
     raise e
 
 if __name__ == "__main__":
