@@ -9,13 +9,13 @@ app.url_map.strict_slashes = False
 
 # --- env ---
 REDIS_URL = os.getenv("REDIS_URL")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPEN_AI_KEY = os.getenv("OPEN_AI_KEY")
 if not REDIS_URL: raise RuntimeError("REDIS_URL 필요")
-if not OPENAI_API_KEY: raise RuntimeError("OPENAI_API_KEY 필요")
+if not OPEN_AI_KEY: raise RuntimeError("OPEN_AI_KEY 필요")
 
 # --- clients ---
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
-oa = OpenAI(api_key=OPENAI_API_KEY)
+oa = OpenAI(api_key=OPEN_AI_KEY)
 
 MAX_ITEMS = 1000
 TTL_SECONDS = 60*60*24*30  # 30일
