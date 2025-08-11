@@ -266,9 +266,8 @@ def debug_tables():
     return {"tables": tables, "messages_count": n}
 
 
-from flask import Response
+from flask import render_template
 
 @app.get("/ui")
 def ui():
-    return Response("<!doctype html><meta charset=utf-8><h1>UI OK</h1>",
-                    mimetype="text/html; charset=utf-8")
+    return render_template("ui.html")
