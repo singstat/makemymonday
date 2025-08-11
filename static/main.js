@@ -4,15 +4,13 @@
   const $send  = document.getElementById('send');
   const $out   = document.getElementById('out');
 
-  // 누적 메시지 저장 (페이지 새로고침 시 유지하려면 localStorage 사용)
   const messages = [];
 
   function renderMessages() {
     $out.textContent = messages.join('\n');
   }
 
-  function handleSubmit(e) {
-    e?.preventDefault?.();
+  function handleSubmit() {
     const text = ($input.value || '').trim();
     if (!text) return;
     messages.push(text);
@@ -21,11 +19,18 @@
     $input.focus();
   }
 
-  // 엔터키
+  // IME(한글 등) 조합 중 Enter 방지
   $input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleSubmit(e);
+    if (e.key === 'Enter') {
+      // 조합 중(한글 입력)에는 무시
+      if (e.isComposing || e.keyCode === 229) return;
+      e.preventDefault();
+      handleSubmit();
+    }
   });
 
-  // 버튼 클릭
-  $send.addEventListener('click', handleSubmit);
+  $send.addEventListener('click', (e) => {
+    e.preventDefault();
+    handleSubmit();
+  });
 })();
