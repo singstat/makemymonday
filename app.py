@@ -1,37 +1,74 @@
-import os, time, uuid
-from flask import Flask, request, jsonify, Response, render_template
-import traceback, logging
+# app.py — Monday minimal server (fresh)
+import os, time, uuid, traceback
 from datetime import datetime, timedelta, timezone
-import psycopg2
-from openai import OpenAI
 
+from flask import Flask, request, jsonify, Response
+
+# ----------------------
+# App
+# ----------------------
 app = Flask(__name__, template_folder="templates", static_folder="static")
-
-logging.basicConfig(level=logging.INFO)
 app.config.update(DEBUG=True, PROPAGATE_EXCEPTIONS=True)
 
+# 선택 의존성 (없어도 동작)
+try:
+    import psycopg2
+except Exception:
+    psycopg2 = None
+
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+
+# ----------------------
+# Globals / Const
+# ----------------------
+SESSIONS: dict[str, dict] = {}   # {sid: {"created":ts,"last":ts,"facts":[...],"messages":[(role,text),...]}}
 KST = timezone(timedelta(hours=9))
-MAX_TURNS = 200
-SUMMARIZE_AFTER = 24  # 이 턴 수 넘으면 앞부분 요약
-SESSIONS = {}
+MAX_TURNS = 200          # LLM에 보낼 최근 턴 수 (세션 메모리는 전체 유지)
+RECENT_ECHO_TURNS = 4    # 응답 하단에 보여줄 최근 턴 수
+
+# ----------------------
+# Error handler (진단용)
+# ----------------------
+@app.errorhandler(Exception)
+def on_error(e):
+    tb = traceback.format_exc()
+    return Response(f"[500] {type(e).__name__}: {e}\n\n{tb}",
+                    status=500, mimetype="text/plain; charset=utf-8")
+
+# ----------------------
+# DB helpers
+# ----------------------
+def has_db():
+    return bool(psycopg2) and bool(os.getenv("DATABASE_URL"))
 
 def db_conn():
-    import psycopg2, os
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL missing")
-    return psycopg2.connect(url)
+    if not has_db():
+        raise RuntimeError("DATABASE_URL/psycopg2 missing")
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
-def save_session_messages(sess) -> int:
-    """SESSIONS[sid]['messages']를 messages 테이블에 일괄 저장"""
+def load_facts_from_db() -> list[str]:
+    if not has_db():
+        return []
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT fact_key, fact_value FROM facts ORDER BY fact_key;")
+        rows = cur.fetchall()
+    return [f"{k}={v}" for k, v in rows]
+
+def save_session_messages(sess: dict) -> int:
+    """세션 메시지를 messages 테이블에 영구 저장"""
+    if not has_db():
+        return 0
     msgs = sess.get("messages") or []
     if not msgs:
         return 0
-    rows = []
     today = datetime.now(KST).date()
     now = datetime.now(KST)
+    rows = []
     for role, content in msgs:
-        role_db = "assistant" if role.lower().startswith("assistant") else role  # 안전
+        role_db = "assistant" if role.lower().startswith("assistant") else role
         rows.append((role_db, content, today, now))
     with db_conn() as conn, conn.cursor() as cur:
         cur.executemany(
@@ -41,38 +78,33 @@ def save_session_messages(sess) -> int:
         conn.commit()
     return len(rows)
 
-def load_recent_messages(hours=36, limit=16):
-    """최근 N시간 내 메시지 최대 limit건 로드 (오래된→최신 순)"""
+def load_recent_messages(hours: int = 168, limit: int = 32) -> list[tuple[str,str]]:
+    """최근 N시간 내 메시지 최대 limit건 로드 (오래된→최신)"""
+    if not has_db():
+        return []
     with db_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            f"""
+            """
             SELECT role, content
             FROM messages
-            WHERE created_at >= NOW() - INTERVAL '{int(hours)} hours'
+            WHERE created_at >= NOW() - INTERVAL %s
             ORDER BY created_at ASC
             LIMIT %s
             """,
-            (limit,)
+            (f"{int(hours)} hours", limit)
         )
-        return [(r, c) for r, c in cur.fetchall()]
+        rows = cur.fetchall()
+    # 역할 정규화
+    norm = []
+    for r, c in rows:
+        rr = "assistant" if str(r).lower().startswith("monday") else r
+        norm.append((rr, c))
+    return norm
 
-def need_summarize(sess)->bool:
-    return len(sess["messages"]) > SUMMARIZE_AFTER
-
-def summarize_history(client, sess):
-    """앞부분 요약해서 sess['summary']에 누적하고 messages는 최근 턴만 남김"""
-    hist_text = "\n".join(f"{r.upper()}: {t}" for r,t in sess["messages"][:-MAX_TURNS])
-    prompt = f"다음 대화를 5줄 이내 핵심만, 사실 위주로 요약:\n{hist_text}"
-    resp = client.responses.create(
-        model="gpt-4o-mini",
-        input=[{"role":"user","content":prompt}]
-    )
-    add = (resp.output_text or "").strip()
-    sess["summary"] = (sess.get("summary") or "") + ("\n" if sess.get("summary") else "") + add
-    # 최근 턴만 남기기
-    sess["messages"] = sess["messages"][-MAX_TURNS:]
-
-def build_system(facts:list[str])->str:
+# ----------------------
+# LLM helpers
+# ----------------------
+def build_system(facts: list[str]) -> str:
     today = datetime.now(KST).strftime("%Y-%m-%d (%A) KST")
     base = [
         "너는 'Monday'. 짧고 명료, 건조한 냉소 10~30%.",
@@ -82,73 +114,58 @@ def build_system(facts:list[str])->str:
     ] + [f"- {f}" for f in facts]
     return "\n".join(base)
 
-def build_messages_for_llm(sess, user_q:str, facts:list[str]):
-    msgs = []
-    msgs.append({"role":"system","content": build_system(facts)})
-    # 세션 요약 쓰려면 여기서 sess.get("summary") 추가 가능(지금은 안 씀)
-    # 최근 N턴만 LLM에 전달 (세션 메모리는 전체 유지)
+def build_messages_for_llm(sess: dict, user_q: str, facts: list[str]) -> list[dict]:
+    msgs = [{"role": "system", "content": build_system(facts)}]
+    # 세션 메모리는 전체 유지하지만, LLM에는 최근 MAX_TURNS만 보냄
     for role, content in sess.get("messages", [])[-MAX_TURNS:]:
         msgs.append({"role": role, "content": content})
-    msgs.append({"role":"user","content": user_q})
+    msgs.append({"role": "user", "content": user_q})
     return msgs
 
-def append_msg(sess:dict, role:str, text:str):
-    if "messages" not in sess: sess["messages"] = []
-    sess["messages"].append((role, text))
-def load_facts_from_db():
-    db_url = os.getenv("DATABASE_URL")
-    if not (psycopg2 and db_url):
-        return []
-    try:
-        with psycopg2.connect(db_url) as conn, conn.cursor() as cur:
-            cur.execute("SELECT fact_key, fact_value FROM facts ORDER BY fact_key;")
-            rows = cur.fetchall()
-        return [f"{k}={v}" for k, v in rows]
-    except Exception:
-        return []
-
-def ask_monday(msg: str, facts: list[str]) -> str:
+def ask_monday(user_q: str, sess: dict, facts: list[str]) -> str:
     api_key = os.getenv("OPEN_AI_KEY")
     if OpenAI and api_key:
-        try:
-            client = OpenAI(api_key=api_key)
-            sys = "너는 Monday. 다음 고정 팩트를 항상 참고하라:\n" + "\n".join(f"- {f}" for f in facts)
-            resp = client.responses.create(
-                model="gpt-4o-mini",
-                input=[{"role":"system","content":sys}, {"role":"user","content":msg}],
-            )
-            return (resp.output_text or "").strip() or "(빈 응답)"
-        except Exception as err:
-            return f"[OpenAI ERROR] {err}"
-    return f"(echo) {msg}"
+        client = OpenAI(api_key=api_key)
+        resp = client.responses.create(
+            model="gpt-4o-mini",
+            input=build_messages_for_llm(sess, user_q, facts),
+        )
+        return (resp.output_text or "").strip() or "(빈 응답)"
+    # Fallback (API 키 없을 때)
+    return f"(echo) {user_q}"
 
-@app.errorhandler(Exception)
-def on_error(e):
-    # 브라우저에 스택트레이스 그대로 노출 (진단용)
-    tb = traceback.format_exc()
-    return Response(f"[500] {type(e).__name__}: {e}\n\n{tb}",
-                    status=500, mimetype="text/plain; charset=utf-8")
+# ----------------------
+# Utils
+# ----------------------
+def append_msg(sess: dict, role: str, text: str):
+    if "messages" not in sess:
+        sess["messages"] = []
+    sess["messages"].append((role, text))
 
-@app.get("/health")
-def health():
-    return {"ok": True}
+def recent_turns_text(sess: dict, n_pairs: int = RECENT_ECHO_TURNS) -> str:
+    # user/assistant 1쌍 == 2메시지
+    recent = sess.get("messages", [])[-2 * n_pairs:]
+    if not recent:
+        return ""
+    lines = ["", "", f"[최근 대화 {n_pairs}턴]"]
+    for role, text in recent:
+        label = "나" if role == "user" else "먼데이"
+        lines.append(f"{label}: {text}")
+    return "\n".join(lines)
+
+# ----------------------
+# Routes
+# ----------------------
+@app.get("/")
+def home():
+    return "Monday minimal server"
 
 @app.get("/envcheck")
 def envcheck():
     return {
         "OPEN_AI_KEY_exists": bool(os.getenv("OPEN_AI_KEY")),
-        "DATABASE_URL_exists": bool(os.getenv("DATABASE_URL"))
+        "DATABASE_URL_exists": bool(os.getenv("DATABASE_URL")),
     }
-
-
-@app.get("/")
-def home():
-    return "Monday minimal server"
-
-@app.get("/ui")
-def ui():
-    # 여기서 템플릿 렌더 → 500이면 보통 파일 경로/이름 문제
-    return render_template("ui.html")
 
 @app.post("/session/start")
 def session_start():
@@ -158,68 +175,45 @@ def session_start():
     facts = load_facts_from_db() + extra
     sid = uuid.uuid4().hex
     now = time.time()
-    SESSIONS[sid] = {
-        "created": now, "last": now,
-        "facts": facts,
-        "messages": []
-    }
-    # 🔹 최근 대화 복원 (필요하면 hours/limit 조절)
+    SESSIONS[sid] = {"created": now, "last": now, "facts": facts, "messages": []}
+    # 최근 대화 복원 (DB 있으면)
     try:
-        SESSIONS[sid]["messages"] = load_recent_messages(hours=36, limit=16)
-    except Exception:
-        pass
+        SESSIONS[sid]["messages"] = load_recent_messages(hours=168, limit=32)
+        app.logger.info(f"[session_start] loaded {len(SESSIONS[sid]['messages'])} msgs")
+    except Exception as err:
+        app.logger.warning(f"[session_start] load_recent_messages ERROR: {err}")
     return jsonify({"session_id": sid, "facts_count": len(facts)})
 
-
-
-@app.route("/monday", methods=["GET","POST"])
+@app.route("/monday", methods=["GET", "POST"])
 def monday():
-    # 2-1) 입력 읽기
-    sid = request.args.get("sid") or (request.get_json(silent=True) or {}).get("sid")
+    # 입력
+    payload = request.get_json(silent=True) or {}
+    sid = request.args.get("sid") or payload.get("sid")
     if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        q = (data.get("message") or "").strip()
+        q = (payload.get("message") or "").strip()
     else:
         q = (request.args.get("q") or "").strip()
     if not q:
         q = "상태 체크. 불필요한 말 없이 한 문장."
 
-    # 2-2) 세션 확보(없으면 임시 세션처럼 동작)
+    # 세션 확보(없으면 임시)
     sess = SESSIONS.get(sid) or {"facts": load_facts_from_db(), "messages": []}
     facts = sess.get("facts", [])
 
-    # 2-3) LLM 호출(세션 메모리 ‘최근 N턴’ + facts 조합)
-    api_key = os.getenv("OPEN_AI_KEY")
-    client = OpenAI(api_key=api_key) if (OpenAI and api_key) else None
-    if client:
-        resp = client.responses.create(
-            model="gpt-4o-mini",
-            input= build_messages_for_llm(sess, q, facts)
-        )
-        reply = (resp.output_text or "").strip() or "(빈 응답)"
-    else:
-        reply = f"(echo) {q}"
+    # LLM 호출
+    reply = ask_monday(q, sess, facts)
 
-    # 2-4) 세션 메모리에 ‘전체’ 누적
+    # 세션에 전체 누적 + 최근 4턴 표시용 문자열
     if sid in SESSIONS:
         SESSIONS[sid]["last"] = time.time()
         append_msg(SESSIONS[sid], "user", q)
         append_msg(SESSIONS[sid], "assistant", reply)
-
-        # 🔵 최근 4턴 추가 출력용 문자열 구성
-        recent_turns = SESSIONS[sid]["messages"][-8:]  # user/assistant 4쌍
-        convo_str = "\n\n[최근 대화 4턴]\n"
-        for role, text in recent_turns:
-            role_label = "나" if role == "user" else "먼데이"
-            convo_str += f"{role_label}: {text}\n"
+        tail = recent_turns_text(SESSIONS[sid], RECENT_ECHO_TURNS)
     else:
-        convo_str = ""
+        tail = ""
 
-    # 최종 응답 = LLM 답변 + 최근 대화
-    final_output = reply + convo_str
-
+    final_output = reply + tail
     return Response(final_output, mimetype="text/plain; charset=utf-8")
-
 
 @app.post("/session/end")
 def session_end():
@@ -227,15 +221,46 @@ def session_end():
     sid = data.get("session_id")
     sess = SESSIONS.pop(sid, None)
     if not sess:
-        return jsonify({"ok": False, "error":"no such session"}), 404
-
+        return jsonify({"ok": False, "error": "no such session"}), 404
     saved = 0
     try:
         saved = save_session_messages(sess)
-    except Exception as _:
-        saved = 0
+        app.logger.info(f"[session_end] saved {saved} msgs")
+    except Exception as err:
+        app.logger.warning(f"[session_end] save_session_messages ERROR: {err}")
+    return jsonify({
+        "ok": True,
+        "messages_in_session": len(sess.get("messages", [])),
+        "saved_to_db": saved,
+        "facts": len(sess.get("facts", []))
+    })
 
-    return jsonify({"ok": True,
-                    "messages_in_session": len(sess["messages"]),
-                    "saved_to_db": saved,
-                    "facts": len(sess["facts"])})
+# (선택) 세션 핑 — 사파리 수면모드 대책
+@app.post("/session/ping")
+def session_ping():
+    data = request.get_json(silent=True) or {}
+    sid = data.get("session_id")
+    if sid in SESSIONS:
+        SESSIONS[sid]["last"] = time.time()
+        return jsonify({"ok": True})
+    return jsonify({"ok": False}), 404
+
+# 디버그
+@app.get("/debug/recent")
+def debug_recent():
+    try:
+        rows = load_recent_messages(hours=168, limit=32)
+        return {"count": len(rows), "data": rows[-8:]}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.get("/debug/tables")
+def debug_tables():
+    if not has_db():
+        return {"tables": [], "messages_count": 0}
+    with db_conn() as conn, conn.cursor() as cur:
+        cur.execute("select table_name from information_schema.tables where table_schema='public' order by 1;")
+        tables = [r[0] for r in cur.fetchall()]
+        cur.execute("select count(*) from messages;")
+        n = cur.fetchone()[0]
+    return {"tables": tables, "messages_count": n}
