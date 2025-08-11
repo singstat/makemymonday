@@ -180,5 +180,23 @@ def health():
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
+from werkzeug.exceptions import HTTPException
+
+@app.errorhandler(404)
+def handle_404(e):
+    if request.path.startswith('/api/'):
+        return jsonify({"ok": False, "error": "not found", "path": request.path}), 404
+    return e, 404  # 페이지 라우트는 기존대로
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    if request.path.startswith('/api/'):
+        if isinstance(e, HTTPException):
+            return jsonify({"ok": False, "error": e.description}), e.code
+        # 예기치 못한 에러
+        return jsonify({"ok": False, "error": str(e)}), 500
+    raise e  # 페이지 라우트는 기존대로
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
