@@ -81,47 +81,85 @@ def save_messages_batch():
     return jsonify({"ok": True, "saved": len(payloads)})
 
 # ChatGPT 프록시 (입력은 KST 시간이 붙은 문자열이 들어옴)
+def _normalize_history(history):
+    out = []
+    for it in history or []:
+        role = 'assistant' if (it.get('role') == 'assistant') else 'user'
+        text = str(it.get('text') or '')
+        ts = int(it.get('ts') or 0)
+        out.append({'role': role, 'text': text, 'ts': ts})
+    return out
+
+def _truncate_history(hist, max_items=20, max_chars=6000):
+    # 뒤에서부터 max_items, 총 길이 max_chars 넘지 않도록 자름
+    acc, total = [], 0
+    for item in reversed(hist):
+        s = item['text']
+        length = len(s)
+        if len(acc) >= max_items or (total + length) > max_chars:
+            break
+        acc.append(item)
+        total += length
+    return list(reversed(acc))
+
 @app.post("/api/chat")
 def chat():
     data = request.get_json(silent=True) or {}
-    raw = (data.get("prompt") or "").strip()
-    if not raw:
-        return jsonify({"ok": False, "error": "empty prompt"}), 400
+    raw_prompt = (data.get("prompt") or "").strip()
+    history = _normalize_history(data.get("history"))
 
-    # 끝에 붙은 "YYYY MM DD HH mm" (KST) 추출 → system에 현재시각으로 전달
-    user_text = raw
+    # 히스토리가 있으면 그걸 컨텍스트로 쓰고, 없으면 prompt만 사용
+    hist = _truncate_history(history)
+
+    # '현재시각' 파생: 우선순위 = 히스토리 마지막 user → prompt
     now_kst_str = None
-    m = STAMP_RE.search(raw)
-    if m:
+
+    def strip_stamp(s: str):
+        m = STAMP_RE.search(s)
+        if not m:
+            return s, None
         y, mo, d, h, mi = map(int, m.groups())
         try:
             dt_kst = datetime(y, mo, d, h, mi, tzinfo=KST)
-            now_kst_str = dt_kst.strftime("%Y-%m-%d %H:%M KST")
-            user_text = STAMP_RE.sub("", raw).rstrip()  # 숫자는 본문에서 제거
+            return STAMP_RE.sub("", s).rstrip(), dt_kst.strftime("%Y-%m-%d %H:%M KST")
         except ValueError:
-            now_kst_str = None  # 잘못된 날짜면 무시
+            return s, None
 
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are Monday. Answer concisely in Korean when appropriate. "
-                "If the current datetime is provided below, treat all relative dates "
-                "like '오늘/어제/이번 주' based on it."
-            ),
-        },
-    ]
+    # 히스토리 마지막 user에서 stamp 시도
+    last_user_idx = max((i for i, it in enumerate(hist) if it['role'] == 'user'), default=-1)
+    if last_user_idx >= 0:
+        clean, now_str = strip_stamp(hist[last_user_idx]['text'])
+        hist[last_user_idx]['text'] = clean
+        if now_str:
+            now_kst_str = now_str
+
+    # 히스토리가 비었으면 prompt로 사용자 발화 생성 (+stamp 제거)
+    chat_messages = [{
+        "role": "system",
+        "content": (
+            "You are Monday. Answer concisely in Korean when appropriate. "
+            "If a current datetime is provided, interpret relative dates like "
+            "'오늘/어제/이번 주' based on it."
+        ),
+    }]
+    if not hist and raw_prompt:
+        cleaned, now_str2 = strip_stamp(raw_prompt)
+        if now_str2: now_kst_str = now_kst_str or now_str2
+        hist = [{"role": "user", "text": cleaned, "ts": int(time.time()*1000)}]
+
     if now_kst_str:
-        messages.append({
+        chat_messages.append({
             "role": "system",
             "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'.",
         })
-    messages.append({"role": "user", "content": user_text})
+
+    for it in hist:
+        chat_messages.append({"role": it["role"], "content": it["text"]})
 
     try:
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
-            messages=messages,
+            messages=chat_messages,
             temperature=0.7,
         )
         reply = (res.choices[0].message.content or "").strip()
