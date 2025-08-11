@@ -74,29 +74,38 @@ function endSession(){
 }
 
 // 메시지 전송
+let SENDING = false;
+
 async function sendMessage(){
+  if (SENDING) return;             // 중복 막기
+  SENDING = true;
+
   const input = document.getElementById('userInput');
   const out   = document.getElementById('out');
-  if (!input || !out) { console.error('DOM ids missing'); return; }
+  if (!input || !out) { console.error('DOM ids missing'); SENDING=false; return; }
 
-  const msg = (input.value || '').trim();
-  const url = '/monday?q=' + encodeURIComponent(msg || '상태 체크. 불필요한 말 없이 한 문장.')
-            + (SID ? '&sid=' + SID : '');
-  console.log('→ fetch', url);
+  let msg = (input.value || '').trim();
+  if (!msg) msg = '상태 체크. 불필요한 말 없이 한 문장.';
+
+  // sid 보장: 저장된 거 쓰고, 없으면 startSession 시도
+  if (!SID) SID = sessionStorage.getItem('SID');
+  if (!SID && typeof startSession === 'function') { await startSession(); }
+  const sid = SID || '';
+
   out.textContent = '…전송 중';
-
   try{
-    const res = await fetch(url);
-    console.log('← status', res.status);
+    const qs = new URLSearchParams({ q: msg, sid });
+    const res = await fetch('/monday?' + qs.toString(), { cache: 'no-store' });
     const text = await res.text();
     out.textContent = text || '(빈 응답)';
   }catch(e){
     out.textContent = '[ERROR] ' + e;
+  }finally{
+    input.value = '';              // 전송 후 비우기
+    SENDING = false;               // 락 해제
   }
-
-  // 전송 후 입력창 비우기
-  input.value = '';
 }
+
 
 // 이벤트 바인딩 (DOMContentLoaded 이후 보장)
 window.addEventListener('DOMContentLoaded', () => {
