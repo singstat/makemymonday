@@ -238,7 +238,7 @@ def chat():
             # No-action fallback
             "If the user's last message does not contain a clear question or actionable request, reply exactly with: 피스"
         ),
-    }
+    }]
 
     if now_kst_str:
         msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
