@@ -40,10 +40,50 @@
   };
   const enqueueOnce = (msg) => { if (!msg.queued) { queue.push(msg); msg.queued = true; } };
 
-  const render = () => {
-    const vis = visible();
-    $out.textContent = vis.map(m => (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`)).join('\n');
-  };
+  // --- 추가: 턴( user → assistant )으로 묶기 ---
+function splitTurns(list) {
+  const turns = [];
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (m.role === 'user') {
+      const turn = [m];
+      if (i + 1 < list.length && list[i + 1].role === 'assistant') {
+        turn.push(list[i + 1]);
+        i++; // 어시스턴트까지 한 턴으로 소모
+      }
+      turns.push(turn);
+    } else if (m.role === 'assistant') {
+      // 고아 assistant도 개별 턴으로 취급
+      turns.push([m]);
+    }
+  }
+  return turns;
+}
+
+// --- 교체: render() (최근 3턴 위, 구분선, 나머지 아래) ---
+const render = () => {
+  // 화면에 보일 항목만: hidden/summary 제외
+  const vis = messages.filter(m => !m.hidden && m.kind !== 'summary');
+
+  const turns = splitTurns(vis);
+  const last3 = turns.slice(-3);
+  const older = turns.slice(0, Math.max(0, turns.length - 3));
+
+  const toLines = (ts) =>
+    ts.flatMap(t =>
+      t.map(m => (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`))
+    );
+
+  const topLines = toLines(last3);      // 최근 3턴 (시간순 유지)
+  const bottomLines = toLines(older);   // 그 이전 턴들
+
+  const sep = (topLines.length && bottomLines.length)
+    ? ['──────────── 이전 대화 ────────────']
+    : [];
+
+  $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
+};
+
 
   // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
   function enforceBudget() {

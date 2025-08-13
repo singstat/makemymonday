@@ -175,6 +175,13 @@ def save_messages_batch():
 
 @app.post("/api/chat")
 def chat():
+    def latest_summary_from(history):
+        for h in reversed(history or []):
+            if h.get("kind") == "summary":
+                txt = (h.get("text") or "").strip()
+                if txt:
+                    return txt
+        return None
     """
     프록시: 프론트가 보낸 prompt(KST 스탬프 포함) + history를 받아
     - hidden/summary 제외한 히스토리만 컨텍스트로 사용
