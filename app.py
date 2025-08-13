@@ -1,81 +1,91 @@
 # app.py
-import os, json, uuid, time, re
+# ---------------------------------------------
+# Monday UI 서버 (Flask + Redis + OpenAI)
+# - /           : UI(html) + sid 쿠키 발급/고정
+# - /api/messages (GET/POST): 대화 로그 조회/저장(visible/hidden/summary 모두)
+# - /api/chat   : ChatGPT 프록시(히스토리 컨텍스트 + KST 'now' 처리)
+# - /api/summarize : hidden(요약 제외) 압축 요약(롤링 요약 지원)
+# - /api/purge_hidden : 요약으로 대체된 hidden(요약 제외) 일괄 삭제
+# ---------------------------------------------
+import os, json, uuid, time, re, logging
 from datetime import datetime, timezone, timedelta
+
 from flask import Flask, render_template, request, jsonify, make_response
+from werkzeug.exceptions import HTTPException
 import redis
 from openai import OpenAI
 
-import logging, traceback
-from werkzeug.exceptions import HTTPException
+# ----- 기본 설정 -----
 logging.basicConfig(level=logging.INFO)
-
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.url_map.strict_slashes = False
 
-# Env
+# ----- 환경 변수 -----
 REDIS_URL = os.getenv("REDIS_URL")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_KEY")
-if not REDIS_URL: raise RuntimeError("REDIS_URL 필요")
-if not OPENAI_API_KEY: raise RuntimeError("OPENAI_API_KEY 또는 OPEN_AI_KEY 필요")
+if not REDIS_URL:
+    raise RuntimeError("REDIS_URL 환경변수가 필요합니다.")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY 또는 OPEN_AI_KEY 환경변수가 필요합니다.")
 
-# Clients
+# ----- 클라이언트 초기화 -----
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 oa = OpenAI(api_key=OPENAI_API_KEY)
 
-# Const
-MAX_ITEMS = 1000
-TTL_SECONDS = 60*60*24*30
+# ----- 상수/규칙 -----
+MAX_ITEMS = 1000                  # 사용자별 Redis 최대 보관 개수
+TTL_SECONDS = 60 * 60 * 24 * 30   # 30일 보관
+SUMMARY_KIND = "summary"          # 요약 메시지 식별자(kind)
 KST = timezone(timedelta(hours=9))
-STAMP_RE = re.compile(r'\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$')
-SUMMARY_KIND = "summary"
+STAMP_RE = re.compile(r"\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$")  # YYYY MM DD HH mm (끝에)
 
-# (참고) 입력 토큰 예산 — 서버에서도 안전차단(대략치)
-BUDGET_TOKENS = 8000
-RESERVED_TOKENS = 1000
-
-def key_for(sid: str) -> str: return f"msgs:{sid}"
+def key_for(sid: str) -> str:
+    return f"msgs:{sid}"
 
 def approx_tokens(s: str) -> int:
-    # 대략 2자=1토큰 가정 (보수적)
-    return max(1, len(s) // 2)
+    """대략 토큰 수(2문자=1토큰 가정). 서버 방어용 추산."""
+    return max(1, len(s)//2)
 
-def truncate_by_tokens(hist, budget=BUDGET_TOKENS - RESERVED_TOKENS):
-    acc, used = [], 0
-    for item in reversed(hist):
-        t = approx_tokens(item["text"])
-        if used + t > budget: break
-        acc.append(item); used += t
-    return list(reversed(acc))
-
-def _strip_kst_stamp(s: str):
-    m = STAMP_RE.search(s)
-    if not m: return s, None
+def strip_kst_stamp(s: str):
+    """문장 끝의 'YYYY MM DD HH mm' (KST) 제거 + 사람이 읽기 좋은 'YYYY-MM-DD HH:MM KST' 반환."""
+    m = STAMP_RE.search(s or "")
+    if not m:
+        return s, None
     y, mo, d, h, mi = map(int, m.groups())
     try:
-        dt_kst = datetime(y, mo, d, h, mi, tzinfo=KST)
+        dt = datetime(y, mo, d, h, mi, tzinfo=KST)
         cleaned = STAMP_RE.sub("", s).rstrip()
-        return cleaned, dt_kst.strftime("%Y-%m-%d %H:%M KST")
+        return cleaned, dt.strftime("%Y-%m-%d %H:%M KST")
     except ValueError:
         return s, None
 
+# =============================================
+# 라우트
+# =============================================
+
 @app.get("/")
 def home():
+    """
+    UI 제공 + sid 쿠키 세팅. (?sid=... 로 sid 고정 가능)
+    """
     qs_sid = request.args.get("sid")
     sid = qs_sid or request.cookies.get("sid") or uuid.uuid4().hex
     resp = make_response(render_template("ui.html"))
     resp.set_cookie("sid", sid, max_age=TTL_SECONDS, samesite="Lax")
     return resp
 
-# /api/messages (GET) — kind 보존, summary는 text 비어도 통과
 @app.get("/api/messages")
 def list_messages():
+    """
+    저장된 모든 항목 반환(visible/hidden/summary 모두).
+    summary는 text가 비어있어도 통과.
+    """
     sid = request.args.get("sid") or request.cookies.get("sid")
     if not sid:
         return jsonify({"ok": False, "error": "no sid"}), 400
 
     raw = r.lrange(key_for(sid), 0, -1)
-    items = []
-    now_ms = int(time.time() * 1000)
+    items, now_ms = [], int(time.time()*1000)
     for s in raw:
         try:
             it = json.loads(s)
@@ -83,28 +93,36 @@ def list_messages():
             continue
 
         role = it.get("role")
-        kind = it.get("kind")  # <-- 추가
-        text = (it.get("text") or "").strip()
+        text = (it.get("text") or "")
         ts = int(it.get("ts") or now_ms)
         if ts < 1_000_000_000_000:
             ts *= 1000
         hidden = bool(it.get("hidden", False))
+        kind = it.get("kind")
 
-        # summary는 빈 문자열 허용, 그 외는 기존 규칙 유지
+        # summary: 빈 텍스트 허용, role 없으면 'system'
         if kind == SUMMARY_KIND:
             if role is None:
                 role = "system"
-        else:
-            if role not in ("user", "assistant") or not text:
-                continue
+            items.append({"role": role, "text": text, "ts": ts, "hidden": True, "kind": SUMMARY_KIND})
+            continue
 
-        items.append({"role": role, "text": text, "ts": ts, "hidden": hidden, "kind": kind})
+        # 일반 메시지: role/text 필수
+        text = text.strip()
+        if role not in ("user", "assistant") or not text:
+            continue
+
+        items.append({"role": role, "text": text, "ts": ts, "hidden": hidden})
+
     return jsonify({"ok": True, "items": items})
 
-
-# /api/messages (POST) — kind 보존, summary는 빈 문자열 허용 + 항상 hidden 취급
 @app.post("/api/messages")
 def save_messages_batch():
+    """
+    클라이언트가 모아둔 큐를 일괄 저장.
+    body: { sid, items: [{role, text, ts, hidden?, kind?}, ...] }
+    - summary는 항상 hidden으로 저장(빈 텍스트 허용)
+    """
     data = request.get_json(silent=True)
     if data is None:
         try:
@@ -118,12 +136,11 @@ def save_messages_batch():
         return jsonify({"ok": True, "saved": 0})
 
     payloads = []
-    now_ms = int(time.time() * 1000)
-
+    now_ms = int(time.time()*1000)
     for it in items:
         role = it.get("role")
         kind = it.get("kind")
-        text = (str(it.get("text") or "")).strip()
+        text = str(it.get("text") or "")
         try:
             ts = int(it.get("ts") or now_ms)
         except Exception:
@@ -132,16 +149,17 @@ def save_messages_batch():
             ts *= 1000
 
         if kind == SUMMARY_KIND:
-            # 요약은 빈 텍스트 허용 + 항상 hidden 취급
+            # 요약은 빈 텍스트 허용 + 항상 hidden
             if role is None:
                 role = "system"
             hidden = True
-        else:
-            hidden = bool(it.get("hidden", False))
-            if role not in ("user", "assistant") or not text:
-                continue
+            payloads.append(json.dumps({"role": role, "text": text, "ts": ts, "hidden": hidden, "kind": SUMMARY_KIND}))
+            continue
 
-        payloads.append(json.dumps({"role": role, "text": text, "ts": ts, "hidden": hidden, "kind": kind}))
+        hidden = bool(it.get("hidden", False))
+        if role not in ("user", "assistant") or not text.strip():
+            continue
+        payloads.append(json.dumps({"role": role, "text": text.strip(), "ts": ts, "hidden": hidden}))
 
     if not payloads:
         return jsonify({"ok": True, "saved": 0})
@@ -152,85 +170,149 @@ def save_messages_batch():
         p.ltrim(k, -MAX_ITEMS, -1)
         p.expire(k, TTL_SECONDS)
         p.execute()
+
     return jsonify({"ok": True, "saved": len(payloads)})
 
-
-# /api/chat — summary는 컨텍스트에서 제외(혹시 hidden이 false여도 가드)
 @app.post("/api/chat")
 def chat():
+    """
+    프록시: 프론트가 보낸 prompt(KST 스탬프 포함) + history를 받아
+    - hidden/summary 제외한 히스토리만 컨텍스트로 사용
+    - 마지막 user(또는 prompt)에서 KST 스탬프를 제거하고 system에 '현재시각'으로 전달
+    """
+    data = request.get_json(silent=True) or {}
+    raw_prompt = (data.get("prompt") or "").strip()
+    history = data.get("history") or []
+
+    # 컨텍스트에 쓸 히스토리: hidden/summary 제외
+    hist = []
+    for h in history:
+        if not isinstance(h, dict):
+            continue
+        if h.get("hidden") or h.get("kind") == SUMMARY_KIND:
+            continue
+        role = "assistant" if h.get("role") == "assistant" else "user"
+        hist.append({"role": role, "text": str(h.get("text") or "")})
+
+    # '현재 시각' 파생(마지막 user → 없으면 prompt)
+    now_kst_str = None
+    for i in range(len(hist)-1, -1, -1):
+        if hist[i]["role"] == "user":
+            cleaned, now_str = strip_kst_stamp(hist[i]["text"])
+            hist[i]["text"] = cleaned
+            if now_str:
+                now_kst_str = now_str
+            break
+    if not now_kst_str and raw_prompt:
+        _, now2 = strip_kst_stamp(raw_prompt)
+        if now2:
+            now_kst_str = now2
+
+    # 메시지 빌드
+    msgs = [{
+        "role": "system",
+        "content": (
+            "You are Monday. Answer concisely in Korean when appropriate. "
+            "If a current datetime is provided, interpret relative dates "
+            "('오늘/어제/이번 주') based on it."
+        ),
+    }]
+    if now_kst_str:
+        msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
+
+    if hist:
+        # 서버쪽도 과도한 입력 방지를 위해 대략 토큰 예산으로 뒤에서부터 자르기
+        budget, used = 8000-1000, 0
+        pruned = []
+        for it in reversed(hist):
+            t = approx_tokens(it["text"])
+            if used + t > budget: break
+            pruned.append(it); used += t
+        for it in reversed(pruned):
+            msgs.append({"role": it["role"], "content": it["text"]})
+    else:
+        if not raw_prompt:
+            return jsonify({"ok": False, "error": "empty prompt"}), 400
+        cleaned, _ = strip_kst_stamp(raw_prompt)
+        msgs.append({"role": "user", "content": cleaned})
+
     try:
-        data = request.get_json(silent=True) or {}
-        raw_prompt = (data.get("prompt") or "").strip()
-        history = data.get("history")
-        if not isinstance(history, list):
-            history = []
-
-        # history 정규화: dict만 받고, hidden/summary 는 컨텍스트 제외
-        clean_hist = []
-        for h in history:
-            if not isinstance(h, dict):
-                continue
-            if h.get("hidden") or h.get("kind") == "summary":
-                continue
-            role = "assistant" if h.get("role") == "assistant" else "user"
-            text = str(h.get("text") or "")
-            clean_hist.append({"role": role, "text": text})
-
-        # 기준 시각: 마지막 user의 스탬프 → 없으면 prompt의 스탬프
-        now_kst_str = None
-        for i in range(len(clean_hist) - 1, -1, -1):
-            if clean_hist[i]["role"] == "user":
-                cleaned, now_str = _strip_kst_stamp(clean_hist[i]["text"])
-                clean_hist[i]["text"] = cleaned
-                if now_str:
-                    now_kst_str = now_str
-                break
-        if not now_kst_str and raw_prompt:
-            _, now2 = _strip_kst_stamp(raw_prompt)
-            if now2:
-                now_kst_str = now2
-
-        # 히스토리 없으면 prompt를 user로 사용(스탬프 제거)
-        msgs = [{
-            "role": "system",
-            "content": (
-                "You are Monday. Answer concisely in Korean when appropriate. "
-                "If a current datetime is provided, interpret relative dates like "
-                "'오늘/어제/이번 주' based on it."
-            ),
-        }]
-        if now_kst_str:
-            msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
-
-        if clean_hist:
-            for it in clean_hist:
-                msgs.append({"role": it["role"], "content": it["text"]})
-        else:
-            if not raw_prompt:
-                return jsonify({"ok": False, "error": "empty prompt"}), 400
-            cleaned, _ = _strip_kst_stamp(raw_prompt)
-            msgs.append({"role": "user", "content": cleaned})
-
-        # OpenAI 호출
         res = oa.chat.completions.create(
             model="gpt-4o-mini",
             messages=msgs,
             temperature=0.7,
-            timeout=30,  # Optional: 네트워크 보호
         )
         reply = (res.choices[0].message.content or "").strip()
         return jsonify({"ok": True, "reply": reply})
-
     except Exception as e:
         app.logger.exception("chat failed")
         return jsonify({"ok": False, "error": str(e)}), 500
 
-# app.py 에 추가
+@app.post("/api/summarize")
+def summarize_hidden():
+    """
+    롤링 요약: 이전 요약(prev_summary) + 신규 hidden 전부(items)를 더 작게 압축.
+    body: { items:[{role,text,ts}...], prev_summary?:str, lang?:'ko'|'en', max_chars?:int }
+    """
+    data = request.get_json(silent=True) or {}
+    items = data.get("items") or []
+    prev = (data.get("prev_summary") or "").strip()
+    lang = (data.get("lang") or "ko").lower()
+    max_chars = int(data.get("max_chars") or 1200)
+
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "bad items"}), 400
+
+    # USER/ASSISTANT 라벨로 합쳐 모델이 맥락 파악하기 쉽게
+    lines = []
+    for it in items:
+        role = "ASSISTANT" if it.get("role") == "assistant" else "USER"
+        text = (it.get("text") or "").strip()
+        if text:
+            lines.append(f"{role}: {text}")
+
+    if not prev and not lines:
+        return jsonify({"ok": False, "error": "empty input"}), 400
+
+    sys = (
+        "You are a factual context compressor.\n"
+        "- Keep ONLY concrete facts, decisions, requirements, constraints, numbers, dates.\n"
+        "- Remove greetings, chit-chat, opinions, duplication, filler.\n"
+        "- Preserve essential context so another LLM can continue the work.\n"
+        "- Output terse bullet-like lines, one fact per line.\n"
+        "- Do NOT invent or infer beyond given content.\n"
+    )
+    if lang.startswith("ko"):
+        sys += f"출력은 한국어. 사실/결정/요구사항/제약/수치/날짜만 남기고 {max_chars}자 이내로 요약."
+
+    user_body = []
+    if prev:
+        user_body.append("PREVIOUS SUMMARY:\n" + prev)
+    if lines:
+        user_body.append("NEW FACTS:\n" + "\n".join(lines))
+
+    try:
+        res = oa.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": sys},
+                {"role": "user", "content": "\n\n".join(user_body)}
+            ],
+            temperature=0.2,
+        )
+        summary = (res.choices[0].message.content or "").strip()
+        if max_chars and len(summary) > max_chars:
+            summary = summary[:max_chars]
+        return jsonify({"ok": True, "summary": summary})
+    except Exception as e:
+        app.logger.exception("summarize failed")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.post("/api/purge_hidden")
 def purge_hidden():
     """
-    요약이 아닌 hidden 항목을 모두 삭제.
-    body: { sid? }  (없으면 쿠키 sid 사용)
+    요약이 아닌 hidden 항목 모두 삭제(클라가 요약 생성 후 불러줌).
+    body: { sid? }
     """
     data = request.get_json(silent=True) or {}
     sid = data.get("sid") or request.cookies.get("sid")
@@ -244,7 +326,6 @@ def purge_hidden():
         try:
             it = json.loads(s)
         except Exception:
-            # 파싱 실패한 건 보수적으로 보존
             kept.append(s)
             continue
         if bool(it.get("hidden", False)) and it.get("kind") != SUMMARY_KIND:
@@ -261,8 +342,6 @@ def purge_hidden():
 
     return jsonify({"ok": True, "removed": removed, "kept": len(kept)})
 
-
-
 @app.get("/health")
 def health():
     try:
@@ -271,32 +350,15 @@ def health():
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
 
-
-@app.errorhandler(404)
-def handle_404(e):
-    if request.path.startswith('/api/'):
-        return jsonify({"ok": False, "error": "not found", "path": request.path}), 404
-    return e, 404  # 페이지 라우트는 기존대로
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    if request.path.startswith('/api/'):
-        if isinstance(e, HTTPException):
-            return jsonify({"ok": False, "error": e.description}), e.code
-        # 예기치 못한 에러
-        return jsonify({"ok": False, "error": str(e)}), 500
-    raise e  # 페이지 라우트는 기존대로
-
+# ----- /api/* 는 항상 JSON 에러 반환 -----
 @app.errorhandler(Exception)
 def handle_any_exception(e):
     app.logger.exception("Error at %s", request.path)
-    # /api/* 요청은 항상 JSON으로 반환
     if request.path.startswith("/api/"):
         if isinstance(e, HTTPException):
             return jsonify({"ok": False, "error": e.description, "code": e.code}), e.code
         return jsonify({"ok": False, "error": str(e)}), 500
-    # 페이지 라우트는 기존 HTML 에러 유지
     raise e
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000"
