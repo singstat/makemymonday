@@ -53,20 +53,38 @@
     return turns;
   }
 
-  // 렌더: 최근 3턴 맨 위 → 구분선 → 나머지 아래
+const render = () => {
+  const vis = visible();
+  const turns = splitTurns(vis);
+
+  const last3 = turns.slice(-3); // 최신 3턴
+  const older = turns.slice(0, turns.length - 3); // 나머지
+
   const render = () => {
-    const vis = visible();
-    const turns = splitTurns(vis);
-    const last3 = turns.slice(-3);
-    const older = turns.slice(0, Math.max(0, turns.length - 3));
+  const vis = visible();
+  const turns = splitTurns(vis);
 
-    const toLines = (ts) => ts.flatMap(t => t.map(m => (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`)));
-    const topLines = toLines(last3);
-    const bottomLines = toLines(older);
-    const sep = (topLines.length && bottomLines.length) ? ['──────────── 이전 대화 ────────────'] : [];
+  const older = turns.slice(0, Math.max(0, turns.length - 3)); // 오래된 턴
+  const last3 = turns.slice(-3); // 최신 3턴
 
-    $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
-  };
+  const toLines = ts => ts.flatMap(t =>
+    t.map(m => (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`))
+  );
+
+  const topLines = toLines(older); // 오래된 거 위
+  const bottomLines = toLines(last3); // 최신 거 아래
+
+  const sep = (topLines.length && bottomLines.length)
+    ? ['──────────── 최근 대화 ────────────']
+    : [];
+
+  $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
+
+  // 최신 대화가 보이도록 스크롤을 맨 아래로
+  $out.parentElement.scrollTop = $out.parentElement.scrollHeight;
+};
+
+
 
   // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
   function enforceBudget() {
