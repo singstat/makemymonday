@@ -7,6 +7,9 @@ from werkzeug.exceptions import HTTPException
 import redis
 from openai import OpenAI
 
+
+from jinja2 import TemplateNotFound
+
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -90,9 +93,15 @@ def root_redirect():
 
 @app.get("/<space>")
 def ui(space):
-    """UI 렌더링(공간별). templates/ui.html 사용"""
-    _ = norm_space(space)  # 유효성만 확인
-    return render_template("ui.html")
+    _ = norm_space(space)
+    try:
+        return render_template("ui.html")  # templates/ui.html 반드시 있어야 함
+    except TemplateNotFound:
+        return (
+            "templates/ui.html not found. "
+            "리포지토리에 templates/ui.html 을 추가했는지, 파일명이 정확한지 확인하세요.",
+            500,
+        )
 
 # ===== API: 공간별 엔드포인트 =====
 @app.get("/api/<space>/messages")
