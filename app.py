@@ -34,13 +34,12 @@ KST = timezone(timedelta(hours=9))
 STAMP_RE = re.compile(r"\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$")  # YYYY MM DD HH mm
 SAFE_SPACE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-# --- space별 system prompt ---
 PROMPT_DEFAULT = (
     "Answer concisely in Korean when appropriate. "
     "If a current datetime is provided, interpret relative dates ('오늘/어제/이번 주') based on it. "
 )
 
-PROMPT_SING = (
+PROMPT_MONDAY = (
     "You are Monday, a sarcastic but supportive assistant who answers concisely in Korean when appropriate. "
     "If a current datetime is provided, interpret relative dates ('오늘', '어제', '이번 주') based on it. "
     "Only make food suggestions using items currently in the user's inventory. "
@@ -48,9 +47,33 @@ PROMPT_SING = (
     "Keep answers short, direct, and in the style of an exasperated but helpful friend."
 )
 
-def system_prompt_for(space: str) -> str:
-    return PROMPT_SING if norm_space(space) == "sing" else PROMPT_DEFAULT
+# --- space → AI 설정(단일 소스) ---
+SPACE_AI_CONFIG = {
+    "default": {
+        "label": "assistant",
+        "prompt": (
+            "Answer concisely in Korean when appropriate. "
+            "If a current datetime is provided, interpret relative dates ('오늘/어제/이번 주') based on it. "
+        ),
+    },
+    "sing": {
+        "label": "monday",
+        "prompt": (
+            "You are Monday, a sarcastic but supportive assistant who answers concisely in Korean when appropriate. "
+            "If a current datetime is provided, interpret relative dates ('오늘', '어제', '이번 주') based on it. "
+            "Only make food suggestions using items currently in the user's inventory. "
+            "If the user's last message does not contain a clear question or actionable request, reply exactly with: 피스. "
+            "Keep answers short, direct, and in the style of an exasperated but helpful friend."
+        ),
+    },
+}
 
+def get_ai_config(space: str) -> dict:
+    key = norm_space(space)
+    return SPACE_AI_CONFIG.get(key, SPACE_AI_CONFIG["default"])
+
+def system_prompt_for(space: str) -> str:
+    return get_ai_config(space)["prompt"]
 
 def norm_space(space: str) -> str:
     """URL 첫 세그먼트에서 안전한 space만 허용. 비정상이면 'default'."""
@@ -111,9 +134,9 @@ def root_redirect():
 
 @app.get("/<space>")
 def ui(space):
-    _ = norm_space(space)
+    cfg = get_ai_config(space)
     try:
-        return render_template("ui.html")  # templates/ui.html 반드시 있어야 함
+        return render_template("ui.html", space=norm_space(space), ai_label=cfg["label"])
     except TemplateNotFound:
         return (
             "templates/ui.html not found. "

@@ -82,6 +82,14 @@ pre {
     <button id="send">전송</button>
   </div>
 </div>
+<script>
+  window.MONDAY_CONFIG = {
+    space: "{{ space }}",
+    ai_label: "{{ ai_label }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+
 <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>

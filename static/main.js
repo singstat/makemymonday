@@ -54,17 +54,28 @@
   }
 
 
-// 🔧 이 블록으로 통째로 교체
+const SPACE = window.MONDAY_CONFIG?.space || 'default';
+const AI_LABEL = window.MONDAY_CONFIG?.ai_label || 'assistant';
+
 function render() {
   const vis = visible();
   const turns = splitTurns(vis);
-
-  const older = turns.slice(0, Math.max(0, turns.length - 3)); // 오래된 턴
-  const last3 = turns.slice(-3);                                // 최신 3턴
+  const older = turns.slice(0, Math.max(0, turns.length - 3));
+  const last3 = turns.slice(-3);
 
   const toLines = (ts) => ts.flatMap(t =>
-    t.map(m => `${m.role === 'user' ? '나' : 'monday'}: ${m.text || ''}`)
+    t.map(m => `${m.role === 'user' ? '나' : AI_LABEL}: ${m.text || ''}`)
   );
+
+  const topLines = toLines(older);
+  const bottomLines = toLines(last3);
+  const sep = (topLines.length && bottomLines.length) ? ['──────────── 최근 대화 ────────────'] : [];
+  $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
+
+  const scroller = $out.parentElement || $out;
+  scroller.scrollTop = scroller.scrollHeight;
+}
+
 
   const topLines = toLines(older);
   const bottomLines = toLines(last3);
@@ -74,10 +85,10 @@ function render() {
 
   $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
 
-  // 스크롤 컨테이너(#messages)가 부모라면 여기로 내리기
   const scroller = $out.parentElement || $out;
   scroller.scrollTop = scroller.scrollHeight;
 }
+
 
 
   // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
