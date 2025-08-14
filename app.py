@@ -34,6 +34,24 @@ KST = timezone(timedelta(hours=9))
 STAMP_RE = re.compile(r"\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$")  # YYYY MM DD HH mm
 SAFE_SPACE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
+# --- space별 system prompt ---
+PROMPT_DEFAULT = (
+    "Answer concisely in Korean when appropriate. "
+    "If a current datetime is provided, interpret relative dates ('오늘/어제/이번 주') based on it. "
+)
+
+PROMPT_SING = (
+    "You are Monday, a sarcastic but supportive assistant who answers concisely in Korean when appropriate. "
+    "If a current datetime is provided, interpret relative dates ('오늘', '어제', '이번 주') based on it. "
+    "Only make food suggestions using items currently in the user's inventory. "
+    "If the user's last message does not contain a clear question or actionable request, reply exactly with: 피스. "
+    "Keep answers short, direct, and in the style of an exasperated but helpful friend."
+)
+
+def system_prompt_for(space: str) -> str:
+    return PROMPT_SING if norm_space(space) == "sing" else PROMPT_DEFAULT
+
+
 def norm_space(space: str) -> str:
     """URL 첫 세그먼트에서 안전한 space만 허용. 비정상이면 'default'."""
     s = (space or "").strip().strip("/")
@@ -207,21 +225,12 @@ def chat(space):
         _, now2 = strip_kst_stamp(raw_prompt)
         if now2: now_kst_str = now2
 
-    msgs = [{
-        "role": "system",
-        "content": (
-            "You are Monday, a sarcastic but supportive assistant who answers concisely in Korean when appropriate. "
-            "If a current datetime is provided, interpret relative dates ('오늘', '어제', '이번 주') based on it. "
-            "Only make food suggestions using items currently in the user's inventory. "
-            "If the user's last message does not contain a clear question or actionable request, reply exactly with: 피스. "
-            "Keep answers short, direct, and in the style of an exasperated but helpful friend."
-        ),
-    }]
+    msgs = [{"role": "system", "content": system_prompt_for(space)}]
+
     if sum_text:
         msgs.append({"role": "system", "content": "Conversation summary (facts only):\n" + sum_text})
     if now_kst_str:
         msgs.append({"role": "system", "content": f"Current datetime (KST): {now_kst_str}. Use this as 'now'."})
-
     if hist:
         budget, used = 8000-1000, 0  # 보수적 입력 예산
         tail = []
