@@ -53,14 +53,8 @@
     return turns;
   }
 
-const render = () => {
-  const vis = visible();
-  const turns = splitTurns(vis);
 
-  const last3 = turns.slice(-3); // 최신 3턴
-  const older = turns.slice(0, turns.length - 3); // 나머지
-
-  const render = () => {
+ const render = () => {
   const vis = visible();
   const turns = splitTurns(vis);
 
