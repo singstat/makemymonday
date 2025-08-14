@@ -6,8 +6,6 @@
   const $out   = document.getElementById('out');
   const $sidEl = document.getElementById('sidView'); // 공간 표시 용도
 
-  // ===== Space from URL =====
-  const SPACE = (location.pathname.replace(/^\/+/, '').split('/')[0] || 'default');
 
   // ===== Config =====
   const SUMMARY_KIND = 'summary';
