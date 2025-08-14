@@ -306,14 +306,6 @@ def summarize_hidden(space):
     if not prev and not lines:
         return jsonify({"ok": False, "error": "empty input"}), 400
 
-    sys = (
-        "You are a factual context compressor.\n"
-        "- Keep ONLY concrete facts, decisions, requirements, constraints, numbers, dates.\n"
-        "- Remove greetings, chit-chat, opinions, duplication, filler.\n"
-        "- Preserve essential context so another LLM can continue the work.\n"
-        "- Output terse bullet-like lines, one fact per line.\n"
-        "- Do NOT invent or infer beyond given content.\n"
-    )
     if lang.startswith("ko"):
         sys += f" 출력은 한국어. 사실/결정/요구사항/제약/수치/날짜만 남기고 {max_chars}자 이내."
 
