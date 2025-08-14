@@ -34,18 +34,7 @@ KST = timezone(timedelta(hours=9))
 STAMP_RE = re.compile(r"\b(\d{4})\s(\d{2})\s(\d{2})\s(\d{2})\s(\d{2})\s*$")  # YYYY MM DD HH mm
 SAFE_SPACE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
-PROMPT_DEFAULT = (
-    "Answer concisely in Korean when appropriate. "
-    "If a current datetime is provided, interpret relative dates ('오늘/어제/이번 주') based on it. "
-)
 
-PROMPT_MONDAY = (
-    "You are Monday, a sarcastic but supportive assistant who answers concisely in Korean when appropriate. "
-    "If a current datetime is provided, interpret relative dates ('오늘', '어제', '이번 주') based on it. "
-    "Only make food suggestions using items currently in the user's inventory. "
-    "If the user's last message does not contain a clear question or actionable request, reply exactly with: 피스. "
-    "Keep answers short, direct, and in the style of an exasperated but helpful friend."
-)
 
 # --- space → AI 설정(단일 소스) ---
 SPACE_AI_CONFIG = {
