@@ -54,30 +54,30 @@
   }
 
 
- const render = () => {
+// 🔧 이 블록으로 통째로 교체
+function render() {
   const vis = visible();
   const turns = splitTurns(vis);
 
   const older = turns.slice(0, Math.max(0, turns.length - 3)); // 오래된 턴
-  const last3 = turns.slice(-3); // 최신 3턴
+  const last3 = turns.slice(-3);                                // 최신 3턴
 
-  const toLines = ts => ts.flatMap(t =>
-    t.map(m => (m.role === 'user' ? `나: ${m.text}` : `monday: ${m.text}`))
+  const toLines = (ts) => ts.flatMap(t =>
+    t.map(m => `${m.role === 'user' ? '나' : 'monday'}: ${m.text || ''}`)
   );
 
-  const topLines = toLines(older); // 오래된 거 위
-  const bottomLines = toLines(last3); // 최신 거 아래
-
+  const topLines = toLines(older);
+  const bottomLines = toLines(last3);
   const sep = (topLines.length && bottomLines.length)
     ? ['──────────── 최근 대화 ────────────']
     : [];
 
   $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
 
-  // 최신 대화가 보이도록 스크롤을 맨 아래로
-  $out.parentElement.scrollTop = $out.parentElement.scrollHeight;
-};
-
+  // 스크롤 컨테이너(#messages)가 부모라면 여기로 내리기
+  const scroller = $out.parentElement || $out;
+  scroller.scrollTop = scroller.scrollHeight;
+}
 
 
   // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
