@@ -1,13 +1,19 @@
-// static/main.js — URL 첫 세그먼트로 공간 구분
+// static/main.js
+
 (() => {
   // ===== DOM =====
   const $input = document.getElementById('userInput');
   const $send  = document.getElementById('send');
   const $out   = document.getElementById('out');
-  const $sidEl = document.getElementById('sidView'); // 공간 표시 용도
+  const $sidEl = document.getElementById('sidView');
 
+  // ===== Config from server =====
+  const cfg = (window.MONDAY_CONFIG && typeof window.MONDAY_CONFIG === 'object') ? window.MONDAY_CONFIG : {};
+  const FALLBACK_SPACE = (location.pathname.replace(/^\/+/, '').split('/')[0] || 'default');
+  const SPACE    = (cfg.space && String(cfg.space)) || FALLBACK_SPACE;
+  const AI_LABEL = (cfg.ai_label && String(cfg.ai_label)) || (SPACE === 'sing' ? 'monday' : 'assistant');
 
-  // ===== Config =====
+  // ===== Constants =====
   const SUMMARY_KIND = 'summary';
   const BUDGET_TOKENS = 8000;
   const RESERVED_TOKENS = 1000;
@@ -18,7 +24,7 @@
   // ===== State =====
   if ($sidEl) $sidEl.textContent = `space: ${SPACE}`;
   const messages = []; // { role, text, ts, hidden?, kind?, persisted?, queued? }
-  let queue = [];      // 업로드 대기(객체 참조)
+  let queue = [];      // 업로드 대기
 
   // ===== Utils =====
   const formatKST = (tsMs) => {
@@ -28,7 +34,7 @@
       hour: '2-digit', minute: '2-digit', hour12: false
     }).formatToParts(new Date(tsMs));
     const get = (t) => parts.find(p => p.type === t)?.value || '';
-    return `${get('year')} ${get('month')} ${get('day')} ${get('hour')} ${get('minute')}`;
+    return `${get('year')} ${get('month')} ${get('day')} ${get('hour')} ${get('minute')} (KST)`;
   };
   const approxTokens = (s) => Math.max(1, Math.ceil(String(s).length / 2));
   const visible = () => messages.filter(m => !m.hidden && m.kind !== SUMMARY_KIND);
@@ -45,39 +51,35 @@
         if (i + 1 < list.length && list[i + 1].role === 'assistant') { t.push(list[i + 1]); i++; }
         turns.push(t);
       } else if (m.role === 'assistant') {
-        turns.push([m]); // 고아 assistant
+        turns.push([m]);
       }
     }
     return turns;
   }
 
+  // ===== Render =====
+  function render() {
+    const vis = visible();
+    const turns = splitTurns(vis);
 
-const SPACE = window.MONDAY_CONFIG?.space || 'default';
-const AI_LABEL = window.MONDAY_CONFIG?.ai_label || 'assistant';
+    const older = turns.slice(0, Math.max(0, turns.length - 3));
+    const last3 = turns.slice(-3);
 
-function render() {
-  const vis = visible();
-  const turns = splitTurns(vis);
-  const older = turns.slice(0, Math.max(0, turns.length - 3));
-  const last3 = turns.slice(-3);
+    const toLines = (ts) => ts.flatMap(t =>
+      t.map(m => `${m.role === 'user' ? '나' : AI_LABEL}: ${m.text || ''}`)
+    );
 
-  const toLines = (ts) => ts.flatMap(t =>
-    t.map(m => `${m.role === 'user' ? '나' : AI_LABEL}: ${m.text || ''}`)
-  );
+    const topLines = toLines(older);
+    const bottomLines = toLines(last3);
+    const sep = (topLines.length && bottomLines.length) ? ['──────────── 최근 대화 ────────────'] : [];
 
-  const topLines = toLines(older);
-  const bottomLines = toLines(last3);
-  const sep = (topLines.length && bottomLines.length) ? ['──────────── 최근 대화 ────────────'] : [];
-  $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
+    $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
 
-  const scroller = $out.parentElement || $out;
-  scroller.scrollTop = scroller.scrollHeight;
-}
+    const scroller = $out.parentElement || $out;
+    scroller.scrollTop = scroller.scrollHeight;
+  }
 
-
-
-
-  // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
+  // ===== Budget enforcement =====
   function enforceBudget() {
     const budget = Math.max(1, BUDGET_TOKENS - RESERVED_TOKENS);
     const sumMsg = latestSummary();
@@ -100,12 +102,10 @@ function render() {
     }
   }
 
-  // 요약 제외 hidden 토큰 합
   const hiddenNonSummaryTokens = () =>
     messages.filter(m => m.hidden && m.kind !== SUMMARY_KIND)
             .reduce((acc, m) => acc + approxTokens(m.text), 0);
 
-  // 요약 존재 보장(빈 summary 1개)
   function ensureSummaryExists() {
     const has = messages.some(m => m.kind === SUMMARY_KIND);
     if (has) return;
@@ -114,7 +114,6 @@ function render() {
     enqueueOnce(summary);
   }
 
-  // 안전 JSON
   async function safeJSON(res) {
     const ct = (res.headers.get('content-type') || '').toLowerCase();
     const body = await res.text();
@@ -123,7 +122,7 @@ function render() {
     return { data, body };
   }
 
-  // ===== 서버 I/O =====
+  // ===== Server I/O =====
   async function loadHistory() {
     try {
       const res = await fetch(`/api/${encodeURIComponent(SPACE)}/messages`, { credentials: 'same-origin' });
@@ -134,7 +133,7 @@ function render() {
         messages.splice(0, messages.length);
         for (const it of data.items) {
           messages.push({
-            role: it.role === 'assistant' ? 'assistant' : (it.role === 'system' ? 'system' : 'user'),
+            role: it.role,
             text: String(it.text || ''),
             ts: Number(it.ts || Date.now()),
             hidden: !!it.hidden,
@@ -177,13 +176,12 @@ function render() {
     return safeJSON(res);
   }
 
-  // 숨김(요약 제외) 전부 → 요약 생성 → summary 저장 → 원본 hidden 삭제
   async function maybeSummarize() {
     if (hiddenNonSummaryTokens() <= SUMMARIZE_TRIGGER_TOKENS) return;
 
     const items = messages
       .filter(m => m.hidden && m.kind !== SUMMARY_KIND && (m.text || '').trim())
-      .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', text: m.text, ts: m.ts }));
+      .map(m => ({ role: m.role, text: m.text, ts: m.ts }));
     if (!items.length) return;
 
     let prev = (latestSummary()?.text || '').trim();
@@ -225,7 +223,7 @@ function render() {
 
       enforceBudget();
       render();
-      flushNow(); // 요약 즉시 저장
+      flushNow();
     } catch (e) {
       console.error('summarize failed', e);
     }
@@ -239,7 +237,7 @@ function render() {
     }
   }
 
-  // ===== 업로드 =====
+  // ===== Upload =====
   async function flushNow() {
     if (!queue.length) return;
     const payload = JSON.stringify({
@@ -281,7 +279,7 @@ function render() {
     return ok;
   }
 
-  // ===== 핸들러 =====
+  // ===== Handlers =====
   async function handleSubmit(e) {
     e?.preventDefault?.();
     if (e?.type === 'keydown' && e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) return;
@@ -292,8 +290,8 @@ function render() {
     const ts = Date.now();
     const withKST = `${raw} ${formatKST(ts)}`;
 
-    // user 메시지
-    const u = { role: 'user', text: withKST, ts, hidden: false, persisted: false, queued: false };
+    // user 메시지 저장은 raw
+    const u = { role: 'user', text: raw, ts, hidden: false, persisted: false, queued: false };
     messages.push(u);
     enqueueOnce(u);
 
@@ -324,7 +322,7 @@ function render() {
     maybeSummarize();
   }
 
-  // ===== 바인딩/시작 =====
+  // ===== Bindings =====
   $input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(e); });
   $send.addEventListener('click', handleSubmit);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushQueueBeacon(); });
