@@ -72,16 +72,35 @@ pre {
 </style>
 <body>
 <div id="app">
-  <header>Monday UI</header>
-  <div id="messages">
-    <pre id="out">여기에 답변이 표시됩니다.</pre>
-    <small id="sidView"></small>
-  </div>
-  <div class="input-bar">
-    <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
-    <button id="send">전송</button>
-  </div>
+    <header>Monday UI</header>
+    <div id="messages">
+        <pre id="out">여기에 답변이 표시됩니다.</pre>
+        <small id="sidView"></small>
+    </div>
+    <div class="input-bar">
+        <input type="file" id="imageInput" accept="image/*">
+        <button id="send">전송</button>
+    </div>
 </div>
+<script>
+    document.getElementById('send').addEventListener('click', function() {
+        const imageInput = document.getElementById('imageInput');
+
+        if (imageInput.files.length > 0) {
+            const file = imageInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(event) {
+                // 이미지 데이터를 전송하는 로직 추가...
+                console.log("전송할 이미지 데이터:", event.target.result);
+            };
+
+            reader.readAsDataURL(file); // 파일을 데이터 URL로 변환
+        } else {
+            console.log("업로드할 이미지가 없습니다.");
+        }
+    });
+</script>
 <script>
   window.MONDAY_CONFIG = {
     space: "{{ space }}",
