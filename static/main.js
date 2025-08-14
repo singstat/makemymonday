@@ -75,18 +75,6 @@ function render() {
 }
 
 
-  const topLines = toLines(older);
-  const bottomLines = toLines(last3);
-  const sep = (topLines.length && bottomLines.length)
-    ? ['──────────── 최근 대화 ────────────']
-    : [];
-
-  $out.textContent = [...topLines, ...sep, ...bottomLines].join('\n');
-
-  const scroller = $out.parentElement || $out;
-  scroller.scrollTop = scroller.scrollHeight;
-}
-
 
 
   // 예산 강제: (summary 토큰 + visible 토큰) > 예산 → 오래된 visible부터 hidden
