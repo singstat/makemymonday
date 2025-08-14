@@ -42,7 +42,8 @@ SPACE_AI_CONFIG = {
         "label": "assistant",
         "prompt": (
             "Answer concisely in Korean when appropriate. "
-            "If a current datetime is provided, interpret relative dates ('오늘/어제/이번 주') based on it. "
+
+            "Give only the single most straightforward solution. "
         ),
     },
     "sing": {
