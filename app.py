@@ -1,127 +1,81 @@
-import os
-import json
-import redis
 from flask import Flask, render_template, request, jsonify
+import os, json, redis
+from openai import OpenAI
 
 app = Flask(__name__)
 
+# OpenAI client
+OPENAI_KEY = os.getenv("OPENAI_KEY")
+client = OpenAI(api_key=OPENAI_KEY)
+
 # Redis 연결
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-r = redis.from_url(redis_url)
+r = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
-from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
-
-import tiktoken
-
-@app.route("/token_count", methods=["POST"])
-def token_count():
-    data = request.json
-    history = data.get("history", [])
-    username = data.get("username")
-
-    # system prompt 결정
-    if username == "test":
-        system_prompt = (
-            "Provide one action item at a time, do not suggest unnecessary implementations, "
-            "and implement only the functionality I specify exactly."
-        )
-    else:
-        system_prompt = ""  # monday 기본값
-
-    enc = tiktoken.encoding_for_model("gpt-4o-mini")
-
-    tokens = 0
-    # system 메시지 포함
-    tokens += len(enc.encode(system_prompt))
-
-    # 히스토리 메시지 포함
-    for msg in history:
-        tokens += len(enc.encode(msg))
-
-    return jsonify({"token_count": tokens})
+@app.route("/<username>")
+def user_page(username):
+    """
+    유저별 페이지.
+    test면 test.html, 아니면 ui.html 반환.
+    """
+    ai_label = os.getenv("AI_LABEL", "test_ai")
+    config = {
+        "ai_label": ai_label,
+        "username": username
+    }
+    template_name = "test.html" if username == "test" else "ui.html"
+    return render_template(template_name, config=config)
 
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    """
+    클라가 맥락/메타데이터/질문을 전부 들고 와서
+    서버는 OpenAI API 호출만 대신 해주는 단순 프록시.
+    """
     data = request.json
-    username = data.get("username")
-    text = data.get("text", "")
-    history = data.get("history", [])
+    messages = data.get("messages", [])
+    model = data.get("model", "gpt-4o-mini")  # 기본 모델
 
-    # system 프롬프트 분기
-    if username == "test":
-        system_prompt = (
-            "Provide one action item at a time, do not suggest unnecessary implementations, "
-            "and implement only the functionality I specify exactly."
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages
         )
-        ai_label = "test_ai"
-    else:
-        system_prompt = ""  # monday 기본값
-        ai_label = "monday"
+        answer = resp.choices[0].message.content
+        return jsonify({"answer": answer})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-    # OpenAI에 보낼 messages 구성
-    messages = [{"role": "system", "content": system_prompt}]
-
-    # history 배열을 role 구분해서 추가
-    for msg in history:
-        if msg.startswith(f"{username}:"):
-            messages.append({"role": "user", "content": msg[len(username)+2:]})
-        elif msg.startswith(f"{ai_label}:"):
-            messages.append({"role": "assistant", "content": msg[len(ai_label)+2:]})
-
-    # 이번 사용자 입력 추가
-    messages.append({"role": "user", "content": text})
-
-    # OpenAI 호출
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages
-    )
-
-    ai_msg = resp.choices[0].message.content
-
-    return jsonify({"ai_message": f"{ai_label}: {ai_msg}"})
-
-
-    ai_msg = resp.choices[0].message.content
-
-    return jsonify({"ai_message": f"{ai_label}: {ai_msg}"})
-
-@app.route("/<username>")
-def user_page(username):
-    ai_label = os.getenv("AI_LABEL", "test_ai")
-    redis_key = f"{username}:{ai_label}"
-
-    # Redis에서 이전 대화 불러오기
-    raw = r.get(redis_key)
-    history = json.loads(raw) if raw else []
-
-    config = {
-        "ai_label": ai_label,
-        "username": username,
-        "history": history
-    }
-
-    # test 사용자일 때 test.html, 아니면 UI.html을 반환
-    template_name = "test.html" if username == "test" else "ui.html"
-    return render_template(template_name, config=config)
 
 @app.route("/backup", methods=["POST"])
 def backup():
+    """
+    클라가 세션 종료 시점에 전체 맥락/메타데이터를 백업.
+    """
     data = request.json
     username = data.get("username")
     ai_label = data.get("ai_label", "test_ai")
-    history = data.get("history", [])
+    payload = data.get("payload", {})  # history, metadata 등 전체
 
     redis_key = f"{username}:{ai_label}"
+    r.set(redis_key, json.dumps(payload, ensure_ascii=False))
+    return jsonify({"status": "ok", "saved_key": redis_key})
 
-    # JSON으로 통째로 저장
-    r.set(redis_key, json.dumps(history, ensure_ascii=False))
 
-    return jsonify({"status": "ok", "count": len(history)})
+@app.route("/restore/<username>", methods=["GET"])
+def restore(username):
+    """
+    클라가 다시 접속할 때 Redis에서 복원.
+    """
+    ai_label = os.getenv("AI_LABEL", "test_ai")
+    redis_key = f"{username}:{ai_label}"
+    raw = r.get(redis_key)
+    if raw:
+        return jsonify({"payload": json.loads(raw)})
+    else:
+        return jsonify({"payload": {}})  # 없으면 빈 값
+
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
