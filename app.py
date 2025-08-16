@@ -19,8 +19,8 @@ def test():
 @app.route("/<username>")
 def user_page(username):
     config = {
-        "space": os.getenv("SPACE_NAME", "default-space"),
-        "ai_label": os.getenv("AI_LABEL", "AI"),
+        "space": "default-space",
+        "ai_label": "AI",
         "username": username
     }
     return render_template("test.html", config=config)
