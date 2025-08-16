@@ -6,28 +6,38 @@ document.addEventListener("DOMContentLoaded", () => {
   const out = document.getElementById("out");
   const sidView = document.getElementById("sidView");
 
-  // 서버에서 내려준 config 값 읽기
   const aiLabel = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.ai_label) || "test_ai";
   const username = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.username) || "unknown";
 
-  // 항상 User + AI Label 같이 출력 (다른 코드가 덮어써도 이 값 유지됨)
+  // 사용자/AI 라벨 표시
   sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
-  // 기본 안내 메시지
+  // 기본 안내 문구
   out.textContent = "여기에 답변이 표시됩니다.";
 
-  // 전송 버튼 클릭 이벤트
+  // 메시지 히스토리를 유지하기 위해 배열 사용
+  const messages = [];
+
+  function renderMessages() {
+    out.textContent = messages.join("\n\n");
+  }
+
   sendBtn.addEventListener("click", () => {
     const text = input.value.trim();
     if (!text) return;
 
-    // 사용자 입력 반영
-    out.textContent = "사용자 입력: " + text;
+    // 사용자 입력 저장
+    messages.push(`${username}: ${text}`);
+
+    // AI의 더미 답변 추가
+    messages.push(`${aiLabel}: test answer`);
+
+    // 메시지 영역 갱신
+    renderMessages();
 
     // 입력창 비우기
     input.value = "";
 
-    // 디버깅용 콘솔 출력
     console.log(`User(${username}) 입력:`, text);
   });
 
@@ -39,3 +49,4 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
