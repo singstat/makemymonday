@@ -48,25 +48,42 @@ def chat():
     data = request.json
     username = data.get("username")
     text = data.get("text", "")
+    history = data.get("history", [])
 
-    # ai_label 분기
+    # system 프롬프트 분기
     if username == "test":
-        ai_label = "test_ai"
         system_prompt = (
             "Provide one action item at a time, do not suggest unnecessary implementations, "
             "and implement only the functionality I specify exactly."
         )
+        ai_label = "test_ai"
     else:
+        system_prompt = ""  # monday 기본값
         ai_label = "monday"
-        system_prompt = ""  # 나중에 넣을 지침
 
+    # OpenAI에 보낼 messages 구성
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # history 배열을 role 구분해서 추가
+    for msg in history:
+        if msg.startswith(f"{username}:"):
+            messages.append({"role": "user", "content": msg[len(username)+2:]})
+        elif msg.startswith(f"{ai_label}:"):
+            messages.append({"role": "assistant", "content": msg[len(ai_label)+2:]})
+
+    # 이번 사용자 입력 추가
+    messages.append({"role": "user", "content": text})
+
+    # OpenAI 호출
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text},
-        ]
+        messages=messages
     )
+
+    ai_msg = resp.choices[0].message.content
+
+    return jsonify({"ai_message": f"{ai_label}: {ai_msg}"})
+
 
     ai_msg = resp.choices[0].message.content
 
