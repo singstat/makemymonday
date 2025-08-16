@@ -5,7 +5,7 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # OpenAI client
-OPENAI_KEY = os.getenv("OPENAI_KEY")
+OPENAI_KEY = os.getenv("OPEN_AI_KEY")
 client = OpenAI(api_key=OPENAI_KEY)
 
 # Redis 연결
