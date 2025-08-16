@@ -17,17 +17,18 @@ client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 def chat():
     data = request.json
     username = data.get("username")
-    ai_label = data.get("ai_label", "test_ai")   # 화면에 보여줄 label
     text = data.get("text", "")
 
-    # system prompt 분기
+    # ai_label 분기
     if username == "test":
+        ai_label = "test_ai"
         system_prompt = (
             "Provide one action item at a time, do not suggest unnecessary implementations, "
             "and implement only the functionality I specify exactly."
         )
     else:
-        system_prompt = ""  # monday 기본값
+        ai_label = "monday"
+        system_prompt = ""  # 나중에 넣을 지침
 
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
