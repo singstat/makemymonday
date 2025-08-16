@@ -2,3 +2,4 @@ flask
 redis
 openai
 tiktoken
+gunicorn
