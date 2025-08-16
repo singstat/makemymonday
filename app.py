@@ -56,7 +56,10 @@ def user_page(username):
         "username": username,
         "history": history
     }
-    return render_template("test.html", config=config)
+
+    # test 사용자일 때 test.html, 아니면 UI.html을 반환
+    template_name = "test.html" if username == "test" else "UI.html"
+    return render_template(template_name, config=config)
 
 @app.route("/backup", methods=["POST"])
 def backup():
