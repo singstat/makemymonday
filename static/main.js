@@ -37,7 +37,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 세션 종료 시 Redis에 history 전체 백업
   window.addEventListener("beforeunload", () => {
-    const payload = JSON.stringify({ username, ai_label: aiLabel, history });
-    navigator.sendBeacon("/backup", payload);
-  });
+  const payload = JSON.stringify({ username, ai_label: aiLabel, history });
+  const blob = new Blob([payload], { type: "application/json" });
+  navigator.sendBeacon("/backup", blob);
+});
+
 });
