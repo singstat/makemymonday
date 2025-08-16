@@ -17,14 +17,22 @@ client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 def chat():
     data = request.json
     username = data.get("username")
-    ai_label = data.get("ai_label", "test_ai")
+    ai_label = data.get("ai_label", "test_ai")   # 화면에 보여줄 label
     text = data.get("text", "")
 
-    # OpenAI API 호출
+    # system prompt 분기
+    if username == "test":
+        system_prompt = (
+            "Provide one action item at a time, do not suggest unnecessary implementations, "
+            "and implement only the functionality I specify exactly."
+        )
+    else:
+        system_prompt = ""  # monday 기본값
+
     resp = client.chat.completions.create(
-        model="gpt-4o-mini",  # 가벼운 모델 예시
+        model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": f"You are {ai_label}."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": text},
         ]
     )
@@ -32,7 +40,6 @@ def chat():
     ai_msg = resp.choices[0].message.content
 
     return jsonify({"messages": [f"{username}: {text}", f"{ai_label}: {ai_msg}"]})
-
 
 @app.route("/<username>")
 def user_page(username):
