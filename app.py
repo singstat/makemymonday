@@ -40,7 +40,7 @@ def chat():
 
     ai_msg = resp.choices[0].message.content
 
-    return jsonify({"messages": [f"{username}: {text}", f"{ai_label}: {ai_msg}"]})
+    return jsonify({"ai_message": f"{ai_label}: {ai_msg}"})
 
 @app.route("/<username>")
 def user_page(username):
