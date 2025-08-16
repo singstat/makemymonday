@@ -16,6 +16,15 @@ def test():
     }
     return render_template("test.html", config=config)
 
+@app.route("/<username>")
+def user_page(username):
+    config = {
+        "space": os.getenv("SPACE_NAME", "default-space"),
+        "ai_label": os.getenv("AI_LABEL", "AI"),
+        "username": username
+    }
+    return render_template("test.html", config=config)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
