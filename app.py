@@ -13,6 +13,36 @@ from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 
+import tiktoken
+
+@app.route("/token_count", methods=["POST"])
+def token_count():
+    data = request.json
+    history = data.get("history", [])
+    username = data.get("username")
+
+    # system prompt 결정
+    if username == "test":
+        system_prompt = (
+            "Provide one action item at a time, do not suggest unnecessary implementations, "
+            "and implement only the functionality I specify exactly."
+        )
+    else:
+        system_prompt = ""  # monday 기본값
+
+    enc = tiktoken.encoding_for_model("gpt-4o-mini")
+
+    tokens = 0
+    # system 메시지 포함
+    tokens += len(enc.encode(system_prompt))
+
+    # 히스토리 메시지 포함
+    for msg in history:
+        tokens += len(enc.encode(msg))
+
+    return jsonify({"token_count": tokens})
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.json
