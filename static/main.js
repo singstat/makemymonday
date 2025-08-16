@@ -13,8 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
   out.textContent = "여기에 답변이 표시됩니다.";
 
   // sidView에 ai_label 표시 (없으면 기본 test_ai)
-  const aiLabel = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.ai_label) || "test_ai";
-  sidView.textContent = "AI Label: " + aiLabel;
+const aiLabel = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.ai_label) || "test_ai";
+const username = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.username) || "unknown";
+sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
   // 전송 버튼 클릭 이벤트
   sendBtn.addEventListener("click", () => {
