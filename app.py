@@ -88,7 +88,7 @@ def user_page(username):
     }
 
     # test 사용자일 때 test.html, 아니면 UI.html을 반환
-    template_name = "test.html" if username == "test" else "UI.html"
+    template_name = "test.html" if username == "test" else "ui.html"
     return render_template(template_name, config=config)
 
 @app.route("/backup", methods=["POST"])
