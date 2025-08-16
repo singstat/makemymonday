@@ -8,9 +8,9 @@ app = Flask(__name__)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(redis_url)
 
-@app.route("/", methods=["GET"])
+@app.route("/test", methods=["GET"])
 def index():
-    return render_template("index.html")
+    return render_template("test.html", config=config)
 
 @app.route("/count", methods=["POST"])
 def count():
