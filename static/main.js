@@ -6,27 +6,29 @@ document.addEventListener("DOMContentLoaded", () => {
   const out = document.getElementById("out");
   const sidView = document.getElementById("sidView");
 
-  // 서버에서 내려온 값 확인
-  console.log("MONDAY_CONFIG:", window.MONDAY_CONFIG);
+  // 서버에서 내려준 config 값 읽기
+  const aiLabel = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.ai_label) || "test_ai";
+  const username = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.username) || "unknown";
 
-  // 기본 출력
+  // 항상 User + AI Label 같이 출력 (다른 코드가 덮어써도 이 값 유지됨)
+  sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
+
+  // 기본 안내 메시지
   out.textContent = "여기에 답변이 표시됩니다.";
-
-  // sidView에 ai_label 표시 (없으면 기본 test_ai)
-const aiLabel = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.ai_label) || "test_ai";
-const username = (window.MONDAY_CONFIG && window.MONDAY_CONFIG.username) || "unknown";
-sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
   // 전송 버튼 클릭 이벤트
   sendBtn.addEventListener("click", () => {
     const text = input.value.trim();
     if (!text) return;
 
-    // 화면에 입력값 출력
+    // 사용자 입력 반영
     out.textContent = "사용자 입력: " + text;
 
-    // 입력창 초기화
+    // 입력창 비우기
     input.value = "";
+
+    // 디버깅용 콘솔 출력
+    console.log(`User(${username}) 입력:`, text);
   });
 
   // Enter 키로도 전송 가능
