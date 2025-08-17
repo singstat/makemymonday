@@ -16,19 +16,34 @@ document.addEventListener("DOMContentLoaded", () => {
     // 상단 라벨 표시
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
-    // 메시지 추가 함수 (user/ai 구분)
-     function appendMessage(sender, text, role="user") {
-        const newMsg = document.createElement("div");
-        newMsg.classList.add("msg", role);
-        // \n → <br> 변환해서 줄바꿈 반영
-        newMsg.innerHTML = `<strong>${sender}:</strong><br>${text.replace(/\n/g, "<br>")}`;
+    // 코드/일반 메시지 구분 함수
+    function isCodeLike(text) {
+        // HTML 태그가 있거나, 백틱 코드블록이 있거나, 탭이 포함된 경우 → 코드로 간주
+        return text.includes("<") && text.includes(">") || text.includes("```") || text.includes("\t");
+    }
+
+    // 메시지 추가 함수
+    function appendMessage(sender, text, role = "user") {
+        let newMsg;
+
+        if (isCodeLike(text)) {
+            // 코드 메시지는 <pre> + textContent → 브라우저가 실행하지 않고 원문 출력
+            newMsg = document.createElement("pre");
+            newMsg.classList.add("msg", role, "code");
+            newMsg.textContent = `${sender}:\n${text}`;
+        } else {
+            // 일반 메시지는 <div> + innerText
+            newMsg = document.createElement("div");
+            newMsg.classList.add("msg", role);
+            newMsg.innerText = `${sender}: ${text}`;
+        }
+
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // 항상 맨 아래로
+        chatArea.scrollTop = chatArea.scrollHeight;
     }
 
     // 디버그 정보 추가 함수
     function appendDebugInfo(info) {
-        debug.innerHTML = '';
         const debugMsg = document.createElement("div");
         debugMsg.textContent = info;
         debugMsg.style.marginTop = "4px";
@@ -72,13 +87,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const data = await resp.json();
             if (data.error) {
-                appendMessage(aiLabel, "(error: " + data.error + ")", "ai");
+                appendMessage(aiLabel, "(error: " + data.error + ")", "assistant");
                 appendDebugInfo("Error: " + data.error);
                 return;
             }
 
             const aiText = data.answer || "(empty)";
-            appendMessage(aiLabel, aiText, "ai");
+            appendMessage(aiLabel, aiText, "assistant");
             messages.push({ role: "assistant", content: aiText });
 
             // 디버깅 로그
@@ -93,7 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         } catch (err) {
             console.error("❌ Fetch error:", err);
-            appendMessage(aiLabel, "(fetch error)", "ai");
+            appendMessage(aiLabel, "(fetch error)", "assistant");
             appendDebugInfo("Fetch error: " + err.message);
         }
     }
