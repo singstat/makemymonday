@@ -18,11 +18,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
-        return text.includes("<") && text.includes(">") || text.includes("```") || text.includes("\t");
+        return text.includes("```") || text.includes("\t");
     }
 
     // 메시지 추가 함수
-    function appendMessage(sender, text) {
+    function appendMessage(sender, text, role = "assistant") {
         let newMsg;
         if (isCodeLike(text)) {
             newMsg = document.createElement("pre");
@@ -35,8 +35,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // 새로운 메시지가 추가될 때마다 스크롤을 가장 아래로
+        chatArea.scrollTop = chatArea.scrollHeight;
     }
+
 
     // 시스템 메시지 설정 함수
     function setSystemMessage(text) {
