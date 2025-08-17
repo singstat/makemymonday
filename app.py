@@ -79,7 +79,11 @@ def user_page(username):
     history = json.loads(history_json) if history_json else []
 
     summary = r.get(redis_summary_key) or ""
-    system_prompt = r.get(redis_system_key) or "You are a helpful assistant."
+
+    if username == "test":
+        system_prompt = "You are a helpful assistant." # test 사용자에 대한 기본 프롬프트
+    else:
+        system_prompt = "Only answer what the user explicitly asks; do not add anything extra." # 다른 사용자에 대한 기본 프롬프트
 
     # 클라에 내려줄 모든 정보
     config = {
@@ -92,6 +96,7 @@ def user_page(username):
 
     template_name = "test.html" if username == "test" else "ui.html"
     return render_template(template_name, config=config)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
