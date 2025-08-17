@@ -72,3 +72,23 @@ pre {
 .input-bar button:active {
     background: #333;
 }
+
+/* 메시지 영역 스타일 */
+#chatArea {
+    flex: 1; /* 남은 공간을 차지 */
+    overflow-y: auto; /* 스크롤 가능 설정 */
+    padding: 16px;
+    background: #ffffff; /* 하얀색 배경 */
+    border-radius: 8px; /* 둥근 모서리 */
+}
+
+/* 디버깅 정보 스타일 */
+#debug {
+    background: #f0f0f0; /* 디버깅 배경 색 */
+    color: #333; /* 텍스트 색 */
+    font-size: 12px; /* 폰트 크기 */
+    padding: 8px; /* 내부 여백 */
+    border: 1px solid #ccc; /* 경계선 */
+    border-radius: 8px; /* 둥근 모서리 */
+    margin-top: 8px; /* 상단 여백 추가 */
+}
