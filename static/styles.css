@@ -74,14 +74,36 @@ pre {
 }
 
 /* 메시지 영역 스타일 */
+/* chatArea 안의 메시지들은 줄바꿈과 들여쓰기를 유지 */
 #chatArea {
-    flex: 1; /* 남은 공간을 차지 */
-    overflow-y: auto; /* 스크롤 가능 설정 */
-    padding: 16px;
-    background: #ffffff; /* 하얀색 배경 */
-    border-radius: 8px; /* 둥근 모서리 */
-    white-space: pre-wrap; /* \n 줄바꿈 허용 */
+    white-space: pre-wrap;   /* \n 줄바꿈 유지 */
+    word-wrap: break-word;   /* 긴 줄 자동 줄바꿈 */
+    font-family: Consolas, monospace; /* 코드 가독성 좋은 글꼴 */
+    font-size: 14px;
+    line-height: 1.5;
 }
+
+/* 메시지 박스 공통 */
+.msg {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+/* 사용자 메시지 */
+.msg.user {
+    background: #111;
+    color: #fff;
+    text-align: right;
+}
+
+/* AI 메시지 */
+.msg.assistant {
+    background: #f1f5f9;
+    color: #111;
+    text-align: left;
+}
+
 
 /* 디버깅 정보 스타일 */
 #debug {

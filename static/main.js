@@ -17,12 +17,13 @@ document.addEventListener("DOMContentLoaded", () => {
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
     // 메시지 추가 함수 (user/ai 구분)
-    function appendMessage(sender, text, role = "user") {
+     function appendMessage(sender, text, role="user") {
         const newMsg = document.createElement("div");
         newMsg.classList.add("msg", role);
-        newMsg.textContent = text;
+        // \n → <br> 변환해서 줄바꿈 반영
+        newMsg.innerHTML = `<strong>${sender}:</strong><br>${text.replace(/\n/g, "<br>")}`;
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // 자동 스크롤
+        chatArea.scrollTop = chatArea.scrollHeight; // 항상 맨 아래로
     }
 
     // 디버그 정보 추가 함수
