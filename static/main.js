@@ -22,21 +22,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 메시지 추가 함수
-    function appendMessage(sender, text, role = "user") {
+    function appendMessage(sender, text) {
         let newMsg;
         if (isCodeLike(text)) {
-            // 코드 메시지는 <pre> + textContent → 브라우저가 실행하지 않고 원문 출력
             newMsg = document.createElement("pre");
             newMsg.classList.add("msg", role, "code");
             newMsg.textContent = `${sender}:\n${text}`;
         } else {
-            // 일반 메시지는 <div> + innerText
             newMsg = document.createElement("div");
             newMsg.classList.add("msg", role);
             newMsg.innerText = `${sender}: ${text}`;
         }
+
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // 스크롤을 가장 아래로 위치
+        chatArea.scrollTop = chatArea.scrollHeight; // 새로운 메시지가 추가될 때마다 스크롤을 가장 아래로
     }
 
     // 시스템 메시지 설정 함수

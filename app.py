@@ -81,7 +81,7 @@ def user_page(username):
     summary = r.get(redis_summary_key) or ""
 
     if username == "test":
-        system_prompt = "Only answer what the user explicitly asks; do not add anything extra." # test 사용자에 대한 기본 프롬프트
+        system_prompt = "Only answer what the user explicitly asks; do not add anything extra. When making multiple modifications within a single code file, please provide the entire modified code to facilitate easier understanding and application of the changes." # test 사용자에 대한 기본 프롬프트
     else:
         system_prompt =  "You are a helpful assistant."# 다른 사용자에 대한 기본 프롬프트
 
