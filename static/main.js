@@ -15,29 +15,56 @@ document.addEventListener("DOMContentLoaded", () => {
     // 상단 라벨 표시
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
+    // 코드/텍스트 구분
+    function isCodeLike(text) {
+        return text.includes("<") && text.includes(">") || text.includes("```") || text.includes("\t");
+    }
+
     // 메시지 추가 함수
-    function appendMessage(sender, text) {
-        const newMsg = document.createElement("div");
-        newMsg.innerHTML = `<strong>${sender}:</strong> ${text}`;
-        chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // 스크롤을 가장 아래로 위치
-    }
+    function appendMessage(sender, text, role = "user") {
+        let newMsg;
 
-    // 시스템 메시지 추가 함수 (최신 메시지로 대체)
-    function setSystemMessage(text) {
-        const existingSystemMsg = document.querySelector(".system-message");
-        if (existingSystemMsg) {
-            // 이미 있는 시스템 메시지를 제거
-            existingSystemMsg.remove();
+        if (isCodeLike(text)) {
+            // 코드 메시지
+            newMsg = document.createElement("pre");
+            newMsg.classList.add("msg", role, "code");
+            newMsg.textContent = `${sender}:\n${text}`;
+        } else {
+            // 일반 메시지
+            newMsg = document.createElement("div");
+            newMsg.classList.add("msg", role);
+            newMsg.innerText = `${sender}: ${text}`;
         }
-        const newSystemMsg = document.createElement("div");
-        newSystemMsg.classList.add("system-message");
-        newSystemMsg.innerHTML = `<strong>System:</strong> ${text}`;
-        chatArea.appendChild(newSystemMsg);
+
+        chatArea.appendChild(newMsg);
+        chatArea.scrollTop = chatArea.scrollHeight;
     }
 
-    // 초기화: 시스템 메시지 출력
+    // 시스템 메시지 출력 (항상 최신으로 대체)
+    function setSystemMessage(text) {
+        const existing = document.querySelector(".system-message");
+        if (existing) existing.remove();
+
+        const newMsg = document.createElement("div");
+        newMsg.classList.add("system-message");
+        newMsg.textContent = `System: ${text}`;
+        chatArea.appendChild(newMsg);
+    }
+
+    // 디버그 로그 추가
+    function appendDebugInfo(info) {
+        const debugMsg = document.createElement("div");
+        debugMsg.textContent = info;
+        debugMsg.style.marginTop = "4px";
+        debug.appendChild(debugMsg);
+    }
+
+    // 초기화: 과거 대화 복원 + 시스템 메시지 + 요약 표시
     setSystemMessage(systemPrompt);
+    messages.forEach(msg => {
+        appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
+    });
+    if (summary) appendDebugInfo("Summary: " + summary);
 
     // 메시지 전송 함수
     async function sendMessage() {
@@ -45,16 +72,25 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!text) return;
 
         // 사용자 메시지 표시
-        appendMessage(username, text);
+        appendMessage(username, text, "user");
+        messages.push({ role: "user", content: text });
+        input.value = "";
 
-        // 서버로 프록시 요청 등 ... (기존 요청 처리 로직 유지)
-    }
+        try {
+            // 서버로 프록시 요청
+            const resp = await fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username,
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        ...messages
+                    ]
+                })
+            });
 
-    sendBtn.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-});
+            const data = await resp.json();
+            if (data.error) {
+                appendMessage(aiLabel, "(error: " + data.error + ")", "assistant");
+                appendDebugInfo("
