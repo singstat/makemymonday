@@ -48,21 +48,6 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/backup", methods=["POST"])
-def backup():
-    """
-    클라가 세션 종료 시점에 전체 맥락/메타데이터를 백업.
-    """
-    data = request.json
-    username = data.get("username")
-    ai_label = data.get("ai_label", "test_ai")
-    payload = data.get("payload", {})  # history, metadata 등 전체
-
-    redis_key = f"{username}:{ai_label}"
-    r.set(redis_key, json.dumps(payload, ensure_ascii=False))
-    return jsonify({"status": "ok", "saved_key": redis_key})
-
-
 @app.route("/restore/<username>", methods=["GET"])
 def restore(username):
     """
@@ -76,6 +61,19 @@ def restore(username):
     else:
         return jsonify({"payload": {}})  # 없으면 빈 값
 
+@app.route("/backup", methods=["POST"])
+def backup():
+    data = request.json
+    username = data.get("username", "unknown")
+    ai_label = data.get("ai_label", "test_ai")
+    history = data.get("history", [])
+
+    redis_key = f"{username}:{ai_label}"
+
+    # ✅ payload 대신 history 직렬화
+    r.set(redis_key, json.dumps(history, ensure_ascii=False))
+
+    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
