@@ -28,28 +28,6 @@ def user_page(username):
     template_name = "test.html" if username == "test" else "ui.html"
     return render_template(template_name, config=config)
 
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    """
-    클라가 맥락/메타데이터/질문을 전부 들고 와서
-    서버는 OpenAI API 호출만 대신 해주는 단순 프록시.
-    """
-    data = request.json
-    messages = data.get("messages", [])
-    model = data.get("model", "gpt-4o-mini")  # 기본 모델
-
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages
-        )
-        answer = resp.choices[0].message.content
-        return jsonify({"answer": answer})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/restore/<username>", methods=["GET"])
 def restore(username):
     """
@@ -76,6 +54,30 @@ def backup():
     r.set(redis_key, json.dumps(history, ensure_ascii=False))
 
     return jsonify({"status": "ok"})
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
+    data = request.json
+    messages = data.get("messages", [])
+    model = data.get("model", "gpt-4o-mini")  # 기본 모델
+    system_prompt = data.get("systemPrompt", "")  # 시스템 프롬프트 받기
+
+    # OpenAI API 호출 시 시스템 프롬프트 사용
+    try:
+        # 시스템 프롬프트와 기존 메시지를 합쳐서 전달
+        complete_messages = [{"role": "system", "content": system_prompt}] + messages
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=complete_messages
+        )
+        answer = resp.choices[0].message.content
+        return jsonify({"answer": answer})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
