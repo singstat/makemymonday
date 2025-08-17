@@ -81,9 +81,9 @@ def user_page(username):
     summary = r.get(redis_summary_key) or ""
 
     if username == "test":
-        system_prompt = "You are a helpful assistant." # test 사용자에 대한 기본 프롬프트
+        system_prompt = "Only answer what the user explicitly asks; do not add anything extra." # test 사용자에 대한 기본 프롬프트
     else:
-        system_prompt = "Only answer what the user explicitly asks; do not add anything extra." # 다른 사용자에 대한 기본 프롬프트
+        system_prompt =  "You are a helpful assistant."# 다른 사용자에 대한 기본 프롬프트
 
     # 클라에 내려줄 모든 정보
     config = {
