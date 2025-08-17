@@ -23,13 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
     systemPrompt = ""; // monday 기본값
   }
 
-  // 메시지 출력 함수 (위로 누적)
-  function appendMessage(sender, text) {
-    const newMsg = document.createElement("pre");
-    newMsg.textContent = `${sender}: ${text}`;
-    out.parentNode.insertBefore(newMsg, out); // 위에 누적
-  }
-
   // 초기 히스토리 복원
   if (config.history && Array.isArray(config.history)) {
     config.history.forEach((msg) => {
@@ -140,3 +133,13 @@ async function sendToAI(userText) {
       body: JSON.stringify(payload)
     });
     ...
+function appendMessage(sender, text) {
+  const newMsg = document.createElement("pre");
+  newMsg.textContent = `${sender}: ${text}`;
+
+  // ✅ 아래로 누적 (맨 뒤에 추가)
+  out.parentNode.appendChild(newMsg);
+
+  // ✅ 스크롤을 항상 맨 아래로
+  out.parentNode.scrollTop = out.parentNode.scrollHeight;
+}
