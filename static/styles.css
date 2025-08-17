@@ -80,6 +80,7 @@ pre {
     padding: 16px;
     background: #ffffff; /* 하얀색 배경 */
     border-radius: 8px; /* 둥근 모서리 */
+    white-space: pre-wrap; /* \n 줄바꿈 허용 */
 }
 
 /* 디버깅 정보 스타일 */
