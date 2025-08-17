@@ -35,6 +35,9 @@
             padding: 12px;
             max-height: 400px;
             overflow-y: auto;
+            white-space: pre-wrap;  /* 줄바꿈/탭 유지 */
+            tab-size: 4;            /* 탭을 4칸으로 보이게 */
+            -moz-tab-size: 4;
         }
         pre {
             background: #0f172a;
@@ -44,6 +47,9 @@
             white-space: pre-wrap;
             word-break: break-word;
             margin: 8px 0;
+            font-family: Consolas, monospace;
+            tab-size: 4;
+            -moz-tab-size: 4;
         }
         #sidView {
             display: block;
@@ -77,42 +83,37 @@
         .input-bar button:active {
             background: #333;
         }
-
-        /* 추가된 시스템 메시지 스타일 */
         .system-message {
-            background-color: #f0f0f0; /* 배경색 */
-            color: #333; /* 텍스트 색상 */
-            padding: 8px; /* 내부 여백 */
-            margin: 4px 0; /* 메시지 간 여백 */
-            border: 1px solid #ccc; /* 경계선 */
-            border-radius: 8px; /* 둥근 모서리 */
+            background-color: #f0f0f0;
+            color: #333;
+            padding: 8px;
+            margin: 4px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
-<div id="app">
-  <header>Monday UI – Test</header>
-
+  <div id="app">
+    <header>Monday UI – Test</header>
 
     <div id="messages">
-    <div id="chatArea"></div>  <!-- 사용자와 AI의 대화가 표시될 영역 -->
-    <small id="sidView"></small>
-    <div id="debug" style="background:#eee; color:#333; font-size:12px; padding:8px; margin-top:8px; border: 1px solid #ccc;">
-        <!-- 디버깅 정보가 이곳에 출력됩니다. -->
+      <div id="chatArea"></div>
+      <small id="sidView"></small>
+      <div id="debug" style="background:#eee; color:#333; font-size:12px; padding:8px; margin-top:8px; border: 1px solid #ccc;">
+        <!-- 디버깅 정보 -->
+      </div>
     </div>
-</div>
 
-
-</div>
-  <div class="input-bar">
-    <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
-    <button id="send">전송</button>
+    <div class="input-bar">
+      <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
+      <button id="send">전송</button>
+    </div>
   </div>
-</div>
 
-<script>
-  window.MONDAY_CONFIG = {{ config | tojson }};
-</script>
-<script src="{{ url_for('static', filename='main.js') }}"></script>
+  <script>
+    window.MONDAY_CONFIG = {{ config | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
