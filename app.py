@@ -14,17 +14,6 @@ client = OpenAI(api_key=OPENAI_KEY)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(redis_url, decode_responses=True)
 
-@app.route("/<username>")
-def user_page(username):
-    """ 유저별 페이지. test면 test.html, 아니면 ui.html 반환. """
-    ai_label = os.getenv("AI_LABEL", "test_ai")
-    config = {
-        "ai_label": ai_label,
-        "username": username
-    }
-    template_name = "test.html" if username == "test" else "ui.html"
-    return render_template(template_name, config=config)
-
 @app.route("/chat", methods=["POST"])
 def chat():
     """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
@@ -75,6 +64,34 @@ def summarize():
         return jsonify({"summary": summary})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/<username>")
+def user_page(username):
+    ai_label = os.getenv("AI_LABEL", "test_ai")
+
+    # Redis 키
+    redis_key = f"{username}:{ai_label}"
+    redis_summary_key = f"{username}:{ai_label}:summary"
+    redis_system_key = f"{username}:{ai_label}:system"
+
+    # Redis에서 읽기
+    history_json = r.get(redis_key)
+    history = json.loads(history_json) if history_json else []
+
+    summary = r.get(redis_summary_key) or ""
+    system_prompt = r.get(redis_system_key) or "You are a helpful assistant."
+
+    # 클라에 내려줄 모든 정보
+    config = {
+        "ai_label": ai_label,
+        "username": username,
+        "history": history,
+        "summary": summary,
+        "system_prompt": system_prompt
+    }
+
+    template_name = "test.html" if username == "test" else "ui.html"
+    return render_template(template_name, config=config)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
