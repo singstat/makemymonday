@@ -16,7 +16,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // 상단 라벨 표시
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel} / Token: 100`;
 
-
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
         return text.includes("```") || text.includes("\t");
@@ -34,11 +33,9 @@ document.addEventListener("DOMContentLoaded", () => {
             newMsg.classList.add("msg", role);
             newMsg.innerText = `${sender}: ${text}`;
         }
-
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight;
+        chatArea.scrollTop = chatArea.scrollHeight; // Auto scroll to the bottom
     }
-
 
     // 시스템 메시지 설정 함수
     function setSystemMessage(text) {
@@ -64,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
     });
     if (summary) appendDebugInfo("Summary: " + summary);
-   // 시스템 메시지 출력
+    setSystemMessage(systemPrompt); // 시스템 메시지 출력
 
     // 메시지 전송 함수
     async function sendMessage() {
@@ -104,19 +101,21 @@ document.addEventListener("DOMContentLoaded", () => {
             // 디버깅 로그
             appendDebugInfo("Response: " + JSON.stringify(data));
 
-            // 백업 요청 (클라가 들고 있는 messages 전송)
-            await fetch("/backup", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, ai_label: aiLabel, history: messages })
-            });
-
         } catch (err) {
             console.error("❌ Fetch error:", err);
             appendMessage(aiLabel, "(fetch error)", "assistant");
             appendDebugInfo("Fetch error: " + err.message);
         }
     }
+
+    // 브라우저 종료 시 메시지 백업
+    window.addEventListener("beforeunload", async () => {
+        await fetch("/backup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, ai_label: aiLabel, history: messages })
+        });
+    });
 
     // 이벤트 바인딩
     sendBtn.addEventListener("click", sendMessage);
