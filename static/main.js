@@ -100,12 +100,11 @@ document.addEventListener("DOMContentLoaded", () => {
             messages.push({ role: "assistant", content: aiText });
 
             // 디버깅 로그
-            appendDebugInfo("Response: " + JSON.stringify(data));
-
-        } catch (err) {
-            console.error("❌ Fetch error:", err);
-            appendMessage(aiLabel, "(fetch error)", "assistant");
-            appendDebugInfo("Fetch error: " + err.message);
+            appendDebugInfo("여기 썸머리 있을거다"); // 수정된 부분
+            } catch (err) {
+                console.error("❌ Fetch error:", err);
+                appendMessage(aiLabel, "(fetch error)", "assistant");
+                appendDebugInfo("Fetch error: " + err.message);
         }
     }
 
