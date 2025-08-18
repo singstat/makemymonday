@@ -33,6 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
             newMsg.classList.add("msg", role);
             newMsg.innerText = `${sender}: ${text}`;
         }
+
         chatArea.appendChild(newMsg);
         chatArea.scrollTop = chatArea.scrollHeight; // Auto scroll to the bottom
     }
@@ -61,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
     });
     if (summary) appendDebugInfo("Summary: " + summary);
+    setSystemMessage(systemPrompt); // 시스템 메시지 출력
 
     // 메시지 전송 함수
     async function sendMessage() {
@@ -80,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({
                     username,
                     messages: [
-                        { role: "system", content: systemPrompt },
+                        { role: "system", content: systemPrompt }, // 시스템 프롬프트를 포함시킴
                         ...messages
                     ]
                 })
