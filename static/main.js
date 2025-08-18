@@ -14,7 +14,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let systemPrompt = config.system_prompt || "Only answer what the user explicitly asks; do not add anything extra.";
 
     // 상단 라벨 표시
-    sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
+    sidView.textContent = `User: ${username} / AI Label: ${aiLabel} / Token: 100`;
+
 
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
