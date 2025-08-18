@@ -81,7 +81,7 @@ def user_page(username):
     summary = r.get(redis_summary_key) or ""
 
     if username == "test":
-        system_prompt = system_prompt = """
+        system_prompt = """
 Only answer what the user explicitly asks.  
 Do not add explanations unless requested.  
 If the user asks for code, return the entire file in a working state, not partial changes.  
