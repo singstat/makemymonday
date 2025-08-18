@@ -32,6 +32,10 @@ def chat():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+
+# 요약 요청 처리 (추가된 부분)
+
 @app.route("/backup", methods=["POST"])
 def backup():
     data = request.json
@@ -44,7 +48,6 @@ def backup():
 
     return jsonify({"status": "ok"})
 
-# 요약 요청 처리 (추가된 부분)
 @app.route("/summarize", methods=["POST"])
 def summarize():
     data = request.json
@@ -61,9 +64,50 @@ def summarize():
             messages=[{"role": "user", "content": summary_prompt}]
         )
         summary = resp.choices[0].message.content.strip()
-        return jsonify({"summary": summary})
+        return jsonify({"summary": @app.route("/backup", methods=["POST"])
+        app.route("/backup", methods=["POST"])
+
+
+def backup():
+    data = request.json
+    username = data.get("username", "unknown")
+    ai_label = data.get("ai_label", "test_ai")
+    history = data.get("history", [])
+
+    # Redis 키 설정
+    redis_key = f"{username}:{ai_label}"
+    r.set(redis_key, json.dumps(history, ensure_ascii=False))
+
+    # 요약 처리 로직 호출
+    summary = summarize_with_messages(history)
+
+    # 요약된 내용을 Redis에 저장
+    redis_summary_key = f"{username}:{ai_label}:summary"  # 요약 키
+    r.set(redis_summary_key, summary, ensure_ascii=False)  # 저장하기
+
+    return jsonify({"status": "ok"})
+
+
+def summarize_with_messages(messages):
+    """ 주어진 메시지 배열을 요약하는 함수 """
+    if not messages:
+        return ""  # 메시지가 없으면 빈 문자열 반환
+
+    summary_prompt = "Please summarize the following conversation:\n"
+    for msg in messages:
+        summary_prompt += f"{msg['role']}: {msg['content']}\n"  # 대화 내용을 조합
+
+    # 요약 처리
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+        summary = resp.choices[0].message.content.strip()  # 요약
+        return summary
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Error summarizing messages: {str(e)}")
+        return ""  # 에러 발생 시 빈 문자열 반환
 
 @app.route("/<username>")
 def user_page(username):
