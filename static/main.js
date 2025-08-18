@@ -91,13 +91,6 @@ document.addEventListener("DOMContentLoaded", () => {
             appendMessage(aiLabel, aiText, "assistant");
             messages.push({ role: "assistant", content: aiText });
 
-            // 디버깅 로그
-            appendDebugInfo("여기 썸머리 있을거다"); // 수정된 부분
-            } catch (err) {
-                console.error("❌ Fetch error:", err);
-                appendMessage(aiLabel, "(fetch error)", "assistant");
-                appendDebugInfo("Fetch error: " + err.message);
-        }
     }
 
     // 브라우저 종료 시 메시지 백업
