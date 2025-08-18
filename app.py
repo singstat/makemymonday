@@ -67,7 +67,7 @@ def backup():
     # 요약 처리 후 Redis에 저장
     summary = summarize_with_messages(history)
     redis_summary_key = f"{username}:{ai_label}:summary"
-    r.set(redis_summary_key, summary, ensure_ascii=False)
+    r.set(redis_summary_key, summary)
 
     return jsonify({"status": "ok"})
 
