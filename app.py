@@ -81,7 +81,12 @@ def user_page(username):
     summary = r.get(redis_summary_key) or ""
 
     if username == "test":
-        system_prompt = "Only answer what the user explicitly asks; do not add anything extra. When making multiple modifications within a single code file, please provide the entire modified code to facilitate easier understanding and application of the changes. Do not just change parts of the code; provide the entire code in a fully working state."
+        system_prompt = system_prompt = """
+Only answer what the user explicitly asks; do not add anything extra. 
+If the user requests code modifications, always provide the entire updated code in a fully working state, not just partial changes. 
+Do not explain alternatives or unrelated technologies unless the user specifically asks. 
+Keep answers direct, minimal, and focused only on the question.
+"""
     else:
         system_prompt = "You are a helpful assistant."
 
