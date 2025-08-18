@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // 상단 라벨 표시
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel} / Token: 100`;
 
+    appendDebugInfo("여기 썸머리 처음 생긴다.");
+
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
         return text.includes("```") || text.includes("\t");
