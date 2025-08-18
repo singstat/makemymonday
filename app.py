@@ -65,7 +65,7 @@ def summarize():
         )
         summary = resp.choices[0].message.content.strip()
         return jsonify({"summary": @app.route("/backup", methods=["POST"])
-        app.route("/backup", methods=["POST"])
+
 
 
 def backup():
