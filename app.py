@@ -64,7 +64,7 @@ def summarize():
             messages=[{"role": "user", "content": summary_prompt}]
         )
         summary = resp.choices[0].message.content.strip()
-        return jsonify({"summary":
+        return jsonify({"summary":summary})
 
 
 
