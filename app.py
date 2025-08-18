@@ -64,7 +64,7 @@ def summarize():
             messages=[{"role": "user", "content": summary_prompt}]
         )
         summary = resp.choices[0].message.content.strip()
-        return jsonify({"summary": @app.route("/backup", methods=["POST"])
+        return jsonify({"summary":
 
 
 
