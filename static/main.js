@@ -50,21 +50,6 @@ document.addEventListener("DOMContentLoaded", () => {
         chatArea.appendChild(newMsg); // 새로운 시스템 메시지 추가
     }
 
-    // 디버그 정보 추가 함수
-    function appendDebugInfo(info) {
-        debug.innerHTML = ''; // 기존의 모든 디버깅 메시지를 제거
-        const debugMsg = document.createElement("div");
-        debugMsg.textContent = info;
-        debugMsg.style.marginTop = "4px"; // 여백 추가
-        debug.appendChild(debugMsg); // 새로운 디버깅 정보 추가
-    }
-
-    // 초기화: 과거 대화, 요약, 시스템 메시지 출력
-    messages.forEach(msg => {
-        appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
-    });
-    if (summary) appendDebugInfo("Summary: " + summary);
-
 
     // 메시지 전송 함수
     async function sendMessage() {
