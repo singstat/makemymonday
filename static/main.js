@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
     });
     if (summary) appendDebugInfo("Summary: " + summary);
-    setSystemMessage(systemPrompt); // 시스템 메시지 출력
+
 
     // 메시지 전송 함수
     async function sendMessage() {
