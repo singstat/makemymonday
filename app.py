@@ -82,10 +82,10 @@ def user_page(username):
 
     if username == "test":
         system_prompt = system_prompt = """
-Only answer what the user explicitly asks; do not add anything extra. 
-If the user requests code modifications, always provide the entire updated code in a fully working state, not just partial changes. 
-Do not explain alternatives or unrelated technologies unless the user specifically asks. 
-Keep answers direct, minimal, and focused only on the question.
+Only answer what the user explicitly asks.  
+Do not add explanations unless requested.  
+If the user asks for code, return the entire file in a working state, not partial changes.  
+Keep answers short, clear, and minimal.
 """
     else:
         system_prompt = "You are a helpful assistant."
