@@ -67,9 +67,9 @@ def summarize():
 
 @app.route("/<username>")
 def user_page(username):
-    ai_label = os.getenv("AI_LABEL", "test_ai")
+    ai_label = os.getenv("AI_LABEL", "test_ai")  # AI 레이블 기본값 설정
 
-    # Redis 키
+    # Redis 키 설정
     redis_key = f"{username}:{ai_label}"
     redis_summary_key = f"{username}:{ai_label}:summary"
     redis_system_key = f"{username}:{ai_label}:system"
@@ -80,17 +80,17 @@ def user_page(username):
 
     summary = r.get(redis_summary_key) or ""
 
+    # 시스템 프롬프트 업데이트
     if username == "test":
-        system_prompt = """
-Only answer what the user explicitly asks.  
-Do not add explanations unless requested.  
-If the user asks for code, return the entire file in a working state, not partial changes.  
-Keep answers short, clear, and minimal.
-"""
+        system_prompt = """Only answer what the user explicitly asks; do not add anything extra. 
+                           If the user requests code modifications, always provide the entire updated code 
+                           in a fully working state, not just partial changes. 
+                           Do not explain alternatives or unrelated technologies unless the user specifically asks. 
+                           Keep answers direct, minimal, and focused only on the question."""
     else:
-        system_prompt = "You are a helpful assistant."
+        system_prompt = "You are a helpful assistant."  # 다른 사용자에 대한 기본 프롬프트
 
-    # 클라에 내려줄 모든 정보
+    # 클라이언트에 내려줄 모든 정보
     config = {
         "ai_label": ai_label,
         "username": username,
@@ -101,7 +101,6 @@ Keep answers short, clear, and minimal.
 
     template_name = "test.html" if username == "test" else "ui.html"
     return render_template(template_name, config=config)
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
