@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     sidView.textContent = `User: ${username} / AI Label: ${aiLabel} / Token: 100`;
 
     appendDebugInfo("디버깅을 포기한다.");
+    appendDebugInfo("Summary: " + summary);
 
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
