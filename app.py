@@ -37,7 +37,14 @@ def summarize_with_messages(messages):
     if not messages:
         return ""  # 메시지가 없으면 빈 문자열 반환
 
-    summary_prompt = "Please summarize the following conversation:\n"
+    summary_prompt = """Summarize the entire conversation. 
+Only output two sections:
+1. Final requirements – a concise bullet-point summary of what the user ultimately wanted.
+2. Final code – the complete final working code that meets those requirements.
+
+Do not include intermediate reasoning, partial code, or rejected attempts. 
+Do not restate the conversation history. 
+Only provide the requirements summary and the final code.\n"""
     for msg in messages:
         summary_prompt += f"{msg['role']}: {msg['content']}\n"  # 대화 조합
 
