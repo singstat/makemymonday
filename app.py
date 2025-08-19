@@ -56,6 +56,8 @@ def summarize_with_messages(messages):
 @app.route("/backup", methods=["POST"])
 def backup():
     data = request.json
+    print(f"📥 Received backup: {data}")  # 👈 확인용 로그
+
     if not isinstance(data, list) or len(data) < 3:
         return jsonify({"error": "Invalid request format"}), 400
 

@@ -1,27 +1,111 @@
-
 <!doctype html>
 <html lang="ko">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Monday UI – Test</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Arial;
+            background: #f9fafb;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        header {
+            padding: 12px 16px;
+            background: #111;
+            color: #fff;
+            font-weight: 700;
+            font-size: 18px;
+        }
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        #chatArea {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+        pre {
+            background: #0f172a;
+            color: #e5e7eb;
+            padding: 12px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 8px 0;
+            font-family: Consolas, monospace;
+            tab-size: 4;
+            -moz-tab-size: 4;
+        }
+        #sidView {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        .input-bar {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background: #fff;
+            border-top: 1px solid #ddd;
+        }
+        .input-bar input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .input-bar button {
+            padding: 0 16px;
+            border: none;
+            border-radius: 8px;
+            background: #111;
+            color: #fff;
+            font-weight: 700;
+            font-size: 16px;
+        }
+        .input-bar button:active {
+            background: #333;
+        }
+        .system-message {
+            background-color: #f0f0f0;
+            color: #333;
+            padding: 8px;
+            margin: 4px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
         <header>Monday UI – Test</header>
         <div id="messages">
-            <div id="chatArea"></div>  <!-- 사용자와 AI의 대화가 표시될 영역 -->
-                <small id="sidView"></small>
-            <div id="debug" style="background:#eee; color:#333; font-size:12px; padding:8px; margin-top:8px; border: 1px solid #ccc;">
-        <!-- 디버깅 정보가 이곳에 출력됩니다. -->
-            </div>
+            <div id="chatArea"></div>
+            <small id="sidView"></small>
         </div>
         <div class="input-bar">
             <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
             <button id="send">전송</button>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/gpt-3-encoder@1.0.0"></script>
     <script>
         window.MONDAY_CONFIG = {{ config | tojson }};
     </script>
