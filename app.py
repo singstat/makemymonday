@@ -76,7 +76,7 @@ def backup():
 
 @app.route("/<username>")
 def user_page(username):
-    ai_label = os.getenv("AI_LABEL", "test_ai")  # AI 레이블 기본값 설정
+    ai_label = "test" if username == "test" else "monday"
 
     # Redis 키 설정
     redis_key = f"{username}:{ai_label}"
