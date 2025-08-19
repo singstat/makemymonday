@@ -110,13 +110,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 브라우저 종료 시 메시지 백업
-    window.addEventListener("beforeunload", async () => {
-        await fetch("/backup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([ username, aiLabel, messages ])
-        });
+    // 브라우저 종료 시 메시지 백업
+    window.addEventListener("beforeunload", () => {
+        const data = JSON.stringify([ username, aiLabel, messages ]);
+        const blob = new Blob([data], { type: "application/json" });
+        navigator.sendBeacon("/backup", blob);
     });
+
 
     // 이벤트 바인딩
     sendBtn.addEventListener("click", sendMessage);
