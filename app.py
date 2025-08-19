@@ -56,9 +56,10 @@ def summarize_with_messages(messages):
 @app.route("/backup", methods=["POST"])
 def backup():
     data = request.json
-    username = data.get("username", "unknown")
-    ai_label = data.get("ai_label", "test_ai")
-    history = data.get("history", [])
+    if not isinstance(data, list) or len(data) < 3:
+        return jsonify({"error": "Invalid request format"}), 400
+
+    username, ai_label, history = data[0], data[1], data[2]
 
     # Redis 키 설정
     redis_key = f"{username}:{ai_label}"

@@ -114,7 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
         await fetch("/backup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, ai_label: aiLabel, history: messages })
+            body: JSON.stringify([ username, aiLabel, messages ])
         });
     });
 
