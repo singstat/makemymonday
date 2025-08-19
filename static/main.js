@@ -59,6 +59,14 @@ document.addEventListener("DOMContentLoaded", () => {
         debug.appendChild(debugMsg); // 새로운 디버깅 정보 추가
     }
 
+    function calculateTokenCount(messages) {
+        let totalTokens = 0;
+        messages.forEach(message => {
+            totalTokens += GPT3Encoder.encode(message.content).length; // 각 메시지의 콘텐츠에 대한 토큰 수 계산
+        });
+        return totalTokens;
+    }
+
     // 초기화: 과거 대화, 요약, 시스템 메시지 출력
     messages.forEach(msg => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
@@ -76,6 +84,17 @@ document.addEventListener("DOMContentLoaded", () => {
         messages.push({ role: "user", content: text });
         input.value = ""; // 입력 필드 비우기
 
+        // 전체 메시지 배열
+        const totalMessages = [
+            { role: "system", content: systemPrompt },
+            { role: "system", content: summary },
+            ...messages
+        ];
+
+        // 토큰 수 계산
+        const tokenCount = calculateTokenCount(totalMessages);
+        console.log("Total tokens used:", tokenCount);
+
         try {
             // 서버로 프록시 요청
             const resp = await fetch("/chat", {
@@ -83,10 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username,
-                    messages: [
-                        { role: "system", content: systemPrompt }, // 시스템 프롬프트를 포함시킴
-                        ...messages
-                    ]
+                    messages: totalMessages
                 })
             });
 
@@ -101,15 +117,14 @@ document.addEventListener("DOMContentLoaded", () => {
             appendMessage(aiLabel, aiText, "assistant");
             messages.push({ role: "assistant", content: aiText });
 
-
-            } catch (err) {
-                console.error("❌ Fetch error:", err);
-                appendMessage(aiLabel, "(fetch error)", "assistant");
-                appendDebugInfo("Fetch error: " + err.message);
+        } catch (err) {
+            console.error("❌ Fetch error:", err);
+            appendMessage(aiLabel, "(fetch error)", "assistant");
+            appendDebugInfo("Fetch error: " + err.message);
         }
     }
+ }
 
-    // 브라우저 종료 시 메시지 백업
     // 브라우저 종료 시 메시지 백업
     window.addEventListener("beforeunload", () => {
         const data = JSON.stringify([ username, aiLabel, messages ]);
