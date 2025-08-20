@@ -63,10 +63,12 @@ document.addEventListener("DOMContentLoaded", () => {
     function calculateTokenCount(messages) {
         let totalTokens = 0;
         messages.forEach(message => {
-            totalTokens += GPT3Encoder.encode(message.content).length; // 각 메시지의 콘텐츠에 대한 토큰 수 계산
+            // encoder.min.js 로드 시 전역 window.encoder 객체 제공됨
+            totalTokens += window.encoder.encode(message.content).length;
         });
         return totalTokens;
     }
+
 
     // 초기화: 과거 대화, 요약, 시스템 메시지 출력
     messages.forEach(msg => {
