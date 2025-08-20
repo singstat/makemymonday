@@ -132,7 +132,6 @@ document.addEventListener("DOMContentLoaded", () => {
         navigator.sendBeacon("/backup", blob);
     });
 
-
     // 이벤트 바인딩
     sendBtn.addEventListener("click", sendMessage);
     input.addEventListener("keypress", (e) => {
@@ -141,4 +140,4 @@ document.addEventListener("DOMContentLoaded", () => {
             sendMessage();
         }
     });
-});
+}); // 👈
