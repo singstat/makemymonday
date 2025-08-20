@@ -101,10 +101,7 @@
   </div>
 
   <!-- 외부 스크립트는 body 끝에 -->
- <script type="module">
-  import { encode } from "https://cdn.jsdelivr.net/npm/gpt-3-encoder@1.0.0/encoder.min.js";
-  window.GPT3Encoder = { encode }; // 전역으로 붙이기
-</script>
+
   <script>
     window.MONDAY_CONFIG = {{ config | tojson | safe }};
   </script>
