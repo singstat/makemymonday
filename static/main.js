@@ -14,9 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let systemPrompt = config.system_prompt || "Only answer what the user explicitly asks; do not add anything extra.";
 
     // 상단 라벨 표시
-    sidView.textContent = `User: ${username} / AI Label: ${aiLabel} / Token: 100`;
+    sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
 
-    appendDebugInfo("디버깅을 포기한다.");
+    // 디버그 로그
     appendDebugInfo("Summary: " + summary);
 
     // 코드/텍스트 구분 함수
@@ -36,55 +36,32 @@ document.addEventListener("DOMContentLoaded", () => {
             newMsg.classList.add("msg", role);
             newMsg.innerText = `${sender}: ${text}`;
         }
-
         chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight; // Auto scroll to the bottom
-    }
-
-    // 시스템 메시지 설정 함수
-    function setSystemMessage(text) {
-        const existing = document.querySelector(".system-message");
-        if (existing) existing.remove(); // 기존 시스템 메시지 제거
-        const newMsg = document.createElement("div");
-        newMsg.classList.add("system-message");
-        newMsg.textContent = `System: ${text}`;
-        chatArea.appendChild(newMsg); // 새로운 시스템 메시지 추가
+        chatArea.scrollTop = chatArea.scrollHeight;
     }
 
     // 디버그 정보 추가 함수
     function appendDebugInfo(info) {
+        debug.innerHTML = ""; // 최신 정보만
         const debugMsg = document.createElement("div");
         debugMsg.textContent = info;
-        debugMsg.style.marginTop = "4px"; // 여백 추가
-        debug.appendChild(debugMsg); // 새로운 디버깅 정보 추가
+        debug.appendChild(debugMsg);
     }
 
-    // 토큰 계산 함수
-    function calculateTokenCount(messages) {
-        let totalTokens = 0;
-        messages.forEach(message => {
-            // encoder.min.js 로드 시 전역 window.encoder 객체 제공됨
-            totalTokens += window.encoder.encode(message.content).length;
-        });
-        return totalTokens;
-    }
-
-
-    // 초기화: 과거 대화, 요약, 시스템 메시지 출력
+    // 초기화: 과거 대화 불러오기
     messages.forEach(msg => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
     });
-    if (summary) appendDebugInfo("Summary: " + summary);
 
     // 메시지 전송 함수
     async function sendMessage() {
         const text = input.value.trim();
         if (!text) return;
 
-        // 사용자 메시지 화면에 표시
+        // 사용자 메시지 표시
         appendMessage(username, text, "user");
         messages.push({ role: "user", content: text });
-        input.value = ""; // 입력 필드 비우기
+        input.value = "";
 
         // 전체 메시지 배열
         const totalMessages = [
@@ -93,12 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ...messages
         ];
 
-        // 토큰 수 계산
-        const tokenCount = calculateTokenCount(totalMessages);
-        console.log("Total tokens used:", tokenCount);
-
         try {
-            // 서버로 프록시 요청
             const resp = await fetch("/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

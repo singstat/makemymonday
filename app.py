@@ -14,12 +14,31 @@ client = OpenAI(api_key=OPENAI_KEY)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(redis_url, decode_responses=True)
 
+import tiktoken
+
+def count_tokens(messages, model="gpt-4o-mini"):
+    """메시지 배열의 토큰 수를 계산"""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("cl100k_base")  # fallback
+
+    total_tokens = 0
+    for msg in messages:
+        total_tokens += len(encoding.encode(msg.get("content", "")))
+    return total_tokens
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
+
+    # ✅ 토큰 계산 (요청 메시지 전체 기준)
+    token_count = count_tokens(messages)
+    print(f"🔢 Token count for {username} = {token_count}")
 
     try:
         # OpenAI API 호출
