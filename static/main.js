@@ -59,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
         debug.appendChild(debugMsg); // 새로운 디버깅 정보 추가
     }
 
+    // 토큰 계산 함수
     function calculateTokenCount(messages) {
         let totalTokens = 0;
         messages.forEach(message => {
@@ -72,7 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
         appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
     });
     if (summary) appendDebugInfo("Summary: " + summary);
-
 
     // 메시지 전송 함수
     async function sendMessage() {
@@ -123,7 +123,6 @@ document.addEventListener("DOMContentLoaded", () => {
             appendDebugInfo("Fetch error: " + err.message);
         }
     }
- }
 
     // 브라우저 종료 시 메시지 백업
     window.addEventListener("beforeunload", () => {
@@ -140,4 +139,4 @@ document.addEventListener("DOMContentLoaded", () => {
             sendMessage();
         }
     });
-}); // 👈
+});
