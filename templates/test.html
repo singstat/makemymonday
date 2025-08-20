@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ko">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/gpt-3-encoder@1.0.0/dist/gpt-3-encoder.min.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Monday UI – Test</title>
@@ -110,7 +111,7 @@
       <button id="send">전송</button>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/gpt-3-encoder@1.0.0"></script>
+
   <script>
     window.MONDAY_CONFIG = {{ config | tojson }};
   </script>
