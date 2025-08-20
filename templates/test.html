@@ -101,10 +101,11 @@
   </div>
 
   <!-- 외부 스크립트는 body 끝에 -->
-
   <script>
     window.MONDAY_CONFIG = {{ config | tojson | safe }};
   </script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
+
+  <small id="sidView"></small>
 </body>
 </html>
