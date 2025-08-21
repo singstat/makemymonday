@@ -32,7 +32,7 @@ def count_tokens(messages, model="gpt-4o-mini"):
 @app.route("/chat", methods=["POST"])
 @app.route("/chat", methods=["POST"])
 def chat():
-    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
+    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 토큰 계산해주고, 크면 메시지 요약해서 지우고 OpenAI API 호출만 대신 해주는 단순 프록시. """
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
