@@ -30,35 +30,31 @@ def count_tokens(messages, model="gpt-4o-mini"):
 
 
 @app.route("/chat", methods=["POST"])
-@app.route("/chat", methods=["POST"])
 def chat():
-    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 토큰 계산해주고, 크면 메시지 요약해서 지우고 OpenAI API 호출만 대신 해주는 단순 프록시. """
+    """클라이언트가 맥락/메타데이터/질문을 전부 들고 와서 토큰 계산 후 OpenAI API 호출만 대신 해주는 단순 프록시."""
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
+    system_prompt = data.get("system_prompt", "You are a helpful assistant.")
 
-    # ✅ 토큰 계산 (요청 메시지 전체 기준)
+    # ✅ 토큰 계산
     token_count = count_tokens(messages)
     print(f"🔢 Token count = {token_count}")
 
     if token_count > 8192:
-        # 1. 요약 및 사용자 메시지를 요약 함수에 전달
+        # 요약 생성
         summary = summarize_with_messages(messages)
 
-        # 2. 요약 값을 업데이트
+        # 메시지를 요약 버전으로 교체
         messages = [
-            {"role": "system", "content": systemPrompt},
-            {"role": "system", "content": summary}  # 요약 추가
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": summary}
         ]
-
-        # 3. 사용자 메시지 삭제
-        # 사용자의 메시지를 제외하고 요약만 유지
-
     else:
-        # 토큰 수가 8192 이하일 경우
+        # 토큰 수가 제한 이하일 경우
         messages = [
-            {"role": "system", content: systemPrompt},
-            ...messages
+            {"role": "system", "content": system_prompt},
+            *messages
         ]
 
     try:
@@ -67,10 +63,11 @@ def chat():
             model=model,
             messages=messages
         )
-        answer = resp.choices[0].message.content
+        answer = resp.choices[0].message.content.strip()
         return jsonify({"answer": answer})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 def summarize_with_messages(messages):
