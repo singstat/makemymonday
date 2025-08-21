@@ -30,6 +30,7 @@ def count_tokens(messages, model="gpt-4o-mini"):
 
 
 @app.route("/chat", methods=["POST"])
+@app.route("/chat", methods=["POST"])
 def chat():
     """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
     data = request.json
@@ -39,6 +40,26 @@ def chat():
     # ✅ 토큰 계산 (요청 메시지 전체 기준)
     token_count = count_tokens(messages)
     print(f"🔢 Token count = {token_count}")
+
+    if token_count > 8192:
+        # 1. 요약 및 사용자 메시지를 요약 함수에 전달
+        summary = summarize_with_messages(messages)
+
+        # 2. 요약 값을 업데이트
+        messages = [
+            {"role": "system", "content": systemPrompt},
+            {"role": "system", "content": summary}  # 요약 추가
+        ]
+
+        # 3. 사용자 메시지 삭제
+        # 사용자의 메시지를 제외하고 요약만 유지
+
+    else:
+        # 토큰 수가 8192 이하일 경우
+        messages = [
+            {"role": "system", content: systemPrompt},
+            ...messages
+        ]
 
     try:
         # OpenAI API 호출
@@ -51,15 +72,18 @@ def chat():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 def summarize_with_messages(messages):
     """ 주어진 메시지 배열을 요약하는 함수 """
     if not messages:
         return ""  # 메시지가 없으면 빈 문자열 반환
 
-    summary_prompt = """Summarize the entire conversation. 
-Only output two sections:
-1. Final requirements – a concise bullet-point summary of what the user ultimately wanted.
-2. Final code – the complete final working code that meets those requirements.
+    summary_prompt = """Update the existing summary with the new information from the conversation. 
+Keep previous requirements and code unless replaced. 
+Output only two sections:
+1. Final requirements – updated bullet-point summary 
+2. Final code – the complete final working code (merged with updates).
+
 
 Do not include intermediate reasoning, partial code, or rejected attempts. 
 Do not restate the conversation history. 
