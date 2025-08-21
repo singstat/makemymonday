@@ -93,7 +93,10 @@
 <body>
   <div id="app">
     <header>Monday UI – Test</header>
-
+    <div id="debug" style="background:#eee; font-size:12px; padding:8px; margin-top:8px;">
+    <!-- 디버그 정보 -->
+  </div>
+     <small id="sidView"></small>
     <div class="input-bar">
       <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
       <button id="send">전송</button>
@@ -106,6 +109,6 @@
   </script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
-  <small id="sidView"></small>
+
 </body>
 </html>
