@@ -46,7 +46,7 @@ def chat():
 
         # 2. 요약 값을 업데이트
         messages = [
-            {"role": "system", "content": systemPrompt},
+            {"role": "system", "content": system_prompt},
             {"role": "system", "content": summary}  # 요약 추가
         ]
 
