@@ -56,7 +56,7 @@ def chat():
     else:
         # 토큰 수가 8192 이하일 경우 그대로 유지
         messages = [
-            {"role": "system", "content": systemPrompt},
+            {"role": "system", "content": system_prompt},
             *messages
         ]
         clear_user_messages = False  # 메시지 삭제 신호 없음
@@ -147,6 +147,8 @@ def user_page(username):
                            in a fully working state, not just partial changes. 
                            Do not explain alternatives or unrelated technologies unless the user specifically asks. 
                            Keep answers direct, minimal, and focused only on the question."""
+    if username == "monday":
+        system_prompt = "You are a helpful assistant."
     else:
         system_prompt = "You are a helpful assistant."  # 다른 사용자에 대한 기본 프롬프트
 
