@@ -38,7 +38,7 @@ def chat():
 
     # ✅ 토큰 계산 (요청 메시지 전체 기준)
     token_count = count_tokens(messages)
-    print(f"🔢 Token count for {username} = {token_count}")
+    print(f"🔢 Token count = {token_count}")
 
     try:
         # OpenAI API 호출
