@@ -87,6 +87,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
+            // clear_user_messages가 true일 경우 사용자 메시지 삭제
+
+            if (data.clear_user_messages) {
+            messages = []; // 메시지를 빈 배열로 초기화
+            }
+
             const aiText = data.answer || "(empty)";
             appendMessage(aiLabel, aiText, "assistant");
             messages.push({ role: "assistant", content: aiText });

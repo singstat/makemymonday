@@ -31,31 +31,35 @@ def count_tokens(messages, model="gpt-4o-mini"):
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """클라이언트가 맥락/메타데이터/질문을 전부 들고 와서 토큰 계산 후 OpenAI API 호출만 대신 해주는 단순 프록시."""
+    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
-    system_prompt = data.get("system_prompt", "You are a helpful assistant.")
 
-    # ✅ 토큰 계산
+    # ✅ 토큰 계산 (요청 메시지 전체 기준)
     token_count = count_tokens(messages)
     print(f"🔢 Token count = {token_count}")
 
     if token_count > 8192:
-        # 요약 생성
+        # 1. 요약 및 사용자 메시지를 요약 함수에 전달
         summary = summarize_with_messages(messages)
 
-        # 메시지를 요약 버전으로 교체
+        # 2. 요약 값을 업데이트
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "system", "content": summary}
+            {"role": "system", "content": systemPrompt},
+            {"role": "system", "content": summary}  # 요약 추가
         ]
+
+        # 사용자 메시지는 삭제됨
+        clear_user_messages = True  # 클라이언트에게 사용자 메시지를 지우라는 신호
+
     else:
-        # 토큰 수가 제한 이하일 경우
+        # 토큰 수가 8192 이하일 경우 그대로 유지
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": systemPrompt},
             *messages
         ]
+        clear_user_messages = False  # 메시지 삭제 신호 없음
 
     try:
         # OpenAI API 호출
@@ -63,8 +67,8 @@ def chat():
             model=model,
             messages=messages
         )
-        answer = resp.choices[0].message.content.strip()
-        return jsonify({"answer": answer})
+        answer = resp.choices[0].message.content
+        return jsonify({"answer": answer, "clear_user_messages": clear_user_messages})  # 삭제 신호 추가
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
