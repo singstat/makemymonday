@@ -26,6 +26,12 @@
             overflow-y: auto;
             white-space: pre-wrap;
         }
+        #sidView {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
         .input-bar {
             display: flex;
             gap: 8px;
@@ -53,6 +59,7 @@
 </head>
 <body>
     <div id="app">
+        <div id="sidView">SID View (기타 정보가 여기에 표시됩니다)</div>
         <div id="chatArea"></div>
         <div class="input-bar">
             <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
@@ -62,6 +69,34 @@
     <script src="https://cdn.jsdelivr.net/npm/gpt-3-encoder@1.0.0"></script>
     <script>
         window.MONDAY_CONFIG = {{ config | tojson }};
+
+        document.getElementById('send').onclick = function() {
+            const input = document.getElementById('userInput');
+            const message = input.value;
+            if (message) {
+                // Display the message in the chat area
+                const chatArea = document.getElementById('chatArea');
+                chatArea.innerHTML += `<div>${message}</div>`;
+
+                // Clear the input field
+                input.value = '';
+
+                // Call the /chat endpoint
+                fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ userInput: message }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Display the response from the backend
+                    chatArea.innerHTML += `<div>${data.reply}</div>`;
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        };
     </script>
     <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
