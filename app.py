@@ -81,12 +81,16 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 
-def summarize_with_messages(messages, summary_prompt):
+def summarize_with_messages(messages, summary, prompt):
     """요약 처리"""
     if not messages:
         return ""
 
-    full_prompt = summary_prompt + "\n"
+    # 기존 summary와 prompt를 합쳐서 full_prompt 구성
+    full_prompt = prompt + "\n"
+    if summary:
+        full_prompt += f"Current summary: {summary}\n\n"
+
     for msg in messages:
         full_prompt += f"{msg['role']}: {msg['content']}\n"
 
