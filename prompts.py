@@ -15,11 +15,11 @@ def get_prompt(ai_label):
     current_time = get_current_kst()  # KST 현재 날짜와 시간 가져오기
 
     prompts = {
-        "test": """Only answer what the user explicitly asks; do not add anything extra.
-                    If the user requests code modifications, always provide the entire updated code
-                    in a fully working state, not just partial changes.
-                    Do not explain alternatives or unrelated technologies unless the user specifically asks.
-                    Keep answers direct, minimal, and focused only on the question.""",
+        "test": """When the user requests code modifications, always provide the entire updated code in a fully working state. 
+  Do not provide partial snippets, alternative technologies, or incomplete changes. When the user asks about errors, debugging, or how something works, explain the issue clearly and provide 
+  concrete, step-by-step guidance if necessary. Avoid being unnecessarily verbose or going off-topic. Keep answers concise, practical, and directly helpful 
+  to the user’s request.
+""",
         "monday": f"You are a helpful assistant. Today's date in KST is {current_time}.",  # KST 날짜 포함
         "summary": "You are a helpful assistant. Please summarize the conversation.",
         "default": "You are a helpful assistant."
