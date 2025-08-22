@@ -127,13 +127,30 @@ def backup():
     return jsonify({"status": "ok"})
 @app.route("/<ai_label>")
 def user_page(ai_label):
-    # Redis 키는 ai_label:ai_label
+    # Redis 키 설정
     redis_key = f"{ai_label}:{ai_label}"
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
+    redis_system_key = f"{ai_label}:{ai_label}:system"
 
     # Redis에서 읽기
     history_json = r.get(redis_key)
-    history = json.loads(history_json) if history_json else []
+    history = []
+    if history_json:
+        try:
+            loaded = json.loads(history_json)
+            # ✅ 올바른 구조인지 확인
+            if (
+                isinstance(loaded, list) and len(loaded) > 0
+                and isinstance(loaded[0], dict)
+                and "role" in loaded[0]
+                and "content" in loaded[0]
+            ):
+                history = loaded
+            else:
+                print("⚠️ Invalid history format detected, resetting to [].")
+        except Exception as e:
+            print(f"⚠️ Failed to parse history_json: {e}")
+
     summary = r.get(redis_summary_key) or ""
 
     # 시스템 프롬프트 업데이트
