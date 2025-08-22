@@ -21,7 +21,16 @@ def get_prompt(ai_label):
   to the user’s request.
 """,
         "monday": f"You are a helpful assistant. Today's date in KST is {current_time}.",  # KST 날짜 포함
-        "summary": "You are a helpful assistant. Please summarize the conversation.",
+        "summary": """Update the existing summary with the new information from the conversation. 
+Keep previous requirements and code unless replaced. 
+
+Output only two sections:  
+1. Final requirements – updated bullet-point summary  
+2. Final code – the complete final working code (merged with updates).  
+
+Do not include intermediate reasoning, partial code, or rejected attempts.  
+Do not restate the conversation history.  
+Only provide the requirements summary and the final code.""",
         "default": "You are a helpful assistant."
     }
     return prompts.get(ai_label, prompts["default"])
