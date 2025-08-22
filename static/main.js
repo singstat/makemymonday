@@ -7,14 +7,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 서버에서 내려준 config
     const config = window.MONDAY_CONFIG || {};
-    const username = config.username || "unknown";
     const aiLabel = config.ai_label || "ai";
     let messages = config.history || [];
     let summary = config.summary || "";
     let systemPrompt = config.system_prompt || "Only answer what the user explicitly asks; do not add anything extra.";
 
     // 상단 라벨 표시
-    sidView.textContent = `User: ${username} / AI Label: ${aiLabel}`;
+    sidView.textContent = `AI Label: ${aiLabel}`;
 
     // 디버그 로그
     appendDebugInfo("Summary: " + summary);
@@ -42,7 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 디버그 정보 추가 함수
     function appendDebugInfo(info) {
-        debug.innerHTML = ""; // 최신 정보만
+        debug.innerHTML = ""; // 최신 정보만 출력
         const debugMsg = document.createElement("div");
         debugMsg.textContent = info;
         debug.appendChild(debugMsg);
@@ -50,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 초기화: 과거 대화 불러오기
     messages.forEach(msg => {
-        appendMessage(msg.role === "user" ? username : aiLabel, msg.content, msg.role);
+        appendMessage(msg.role === "user" ? "User" : aiLabel, msg.content, msg.role);
     });
 
     // 메시지 전송 함수
@@ -59,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!text) return;
 
         // 사용자 메시지 표시
-        appendMessage(username, text, "user");
+        appendMessage("User", text, "user");
         messages.push({ role: "user", content: text });
         input.value = "";
 
@@ -75,8 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    username,
-                    system_prompt,
+                    ai_label: aiLabel,
+                    system_prompt: systemPrompt,
                     messages: totalMessages
                 })
             });
@@ -88,10 +87,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            // clear_user_messages가 true일 경우 사용자 메시지 삭제
-
+            // clear_user_messages 신호 → 메시지 초기화
             if (data.clear_user_messages) {
-            messages = []; // 메시지를 빈 배열로 초기화
+                messages = [];
             }
 
             const aiText = data.answer || "(empty)";
