@@ -117,10 +117,10 @@ def backup():
     # Redis 키 설정
     redis_key = f"{ai_label}:{ai_label}"
     r.set(redis_key, json.dumps(history, ensure_ascii=False))  # history를 Redis에 저장
-    print(f"history = {history}")
     # 요약 처리 후 Redis에 저장
     summary_result = summarize_with_messages(history, summary, get_prompt("summary"))  # history와 summary로 요약 처리
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
+    print(f"summary_result  = {summary_result }")
     r.set(redis_summary_key, summary_result)  # 요약 결과를 Redis에 저장
 
     return jsonify({"status": "ok"})
