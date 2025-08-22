@@ -113,32 +113,27 @@ def backup():
     if not isinstance(data, list) or len(data) < 3:
         return jsonify({"error": "Invalid request format"}), 400
 
-    username, ai_label, history = data[0], data[1], data[2]
+    ai_label, history = data[0], data[1]
 
     # Redis 키 설정
-    redis_key = f"{username}:{ai_label}"
+    redis_key = f"{ai_label}:{ai_label}"
     r.set(redis_key, json.dumps(history, ensure_ascii=False))
 
     # 요약 처리 후 Redis에 저장
     summary = summarize_with_messages(history)
-    redis_summary_key = f"{username}:{ai_label}:summary"
+    redis_summary_key = f"{ai_label}:{ai_label}":summary"
     r.set(redis_summary_key, summary)
 
     return jsonify({"status": "ok"})
-
-@app.route("/<username>")
-def user_page(username):
-    ai_label = "test" if username == "test" else "monday"
-
-    # Redis 키 설정
-    redis_key = f"{username}:{ai_label}"
-    redis_summary_key = f"{username}:{ai_label}:summary"
-    redis_system_key = f"{username}:{ai_label}:system"
+@app.route("/<ai_label>")
+def user_page(ai_label):
+    # Redis 키는 ai_label:ai_label
+    redis_key = f"{ai_label}:{ai_label}"
+    redis_summary_key = f"{ai_label}:{ai_label}:summary"
 
     # Redis에서 읽기
     history_json = r.get(redis_key)
     history = json.loads(history_json) if history_json else []
-
     summary = r.get(redis_summary_key) or ""
 
     # 시스템 프롬프트 업데이트

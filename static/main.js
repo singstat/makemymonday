@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 브라우저 종료 시 메시지 백업
     window.addEventListener("beforeunload", () => {
-        const data = JSON.stringify([ username, aiLabel, messages ]);
+        const data = JSON.stringify([ aiLabel, messages ]);
         const blob = new Blob([data], { type: "application/json" });
         navigator.sendBeacon("/backup", blob);
     });
