@@ -73,11 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const resp = await fetch("/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ai_label: aiLabel,
-                    system_prompt: systemPrompt,
-                    messages: totalMessages
-                })
+                body: JSON.stringify([
+                    aiLabel,         // ai_label
+                    totalMessages,   // history (messages 포괄)
+                    summary          // summary
+                ])
             });
 
             const data = await resp.json();
@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 브라우저 종료 시 메시지 백업
     window.addEventListener("beforeunload", () => {
-        const data = JSON.stringify([ aiLabel, messages ]);
+        const data = JSON.stringify([aiLabel, messages, summary]);
         const blob = new Blob([data], { type: "application/json" });
         navigator.sendBeacon("/backup", blob);
     });

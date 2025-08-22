@@ -33,11 +33,16 @@ def count_tokens(messages, model="gpt-4o-mini"):
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """ 클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시. """
+    """클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시."""
     data = request.json
-    messages = data.get("messages", [])
-    model = data.get("model", "gpt-4o-mini")  # 기본 모델
-    ai_label = data.get("ai_label", "default")  # 클라이언트에서 ai_label을 가져옵니다.
+    if not isinstance(data, list) or len(data) < 3:
+        return jsonify({"error": "Invalid request format"}), 400
+
+    ai_label = data[0]  # ai_label
+    messages = data[1]  # messages (history)
+    summary = data[2]   # summary
+
+    model = "gpt-4o-mini"  # 기본 모델
 
     # 시스템 프롬프트를 get_prompt를 사용하여 가져옵니다.
     system_prompt = get_prompt(ai_label)
@@ -48,7 +53,7 @@ def chat():
 
     if token_count > 8192:
         # 1. 요약 및 사용자 메시지를 요약 함수에 전달
-        summary = summarize_with_messages(messages, get_prompt("summary"))
+        summary = summarize_with_messages(messages, summary, get_prompt("summary"))
 
         # 2. 요약 값을 업데이트
         messages = [
@@ -95,27 +100,26 @@ def summarize_with_messages(messages, summary_prompt):
         print(f"Error summarizing messages: {str(e)}")
         return ""
 
-
 @app.route("/backup", methods=["POST"])
 def backup():
     data = request.json
 
+    # 데이터 유효성 검사
     if not isinstance(data, list) or len(data) < 3:
         return jsonify({"error": "Invalid request format"}), 400
 
-    ai_label, history = data[0], data[1]
+    ai_label, history, summary = data[0], data[1], data[2]  # 데이터 수신
 
     # Redis 키 설정
     redis_key = f"{ai_label}:{ai_label}"
-    r.set(redis_key, json.dumps(history, ensure_ascii=False))
+    r.set(redis_key, json.dumps(history, ensure_ascii=False))  # history를 Redis에 저장
 
     # 요약 처리 후 Redis에 저장
-    summary = summarize_with_messages(history, get_prompt("summary"))  # messages를 history로 변경
+    summary_result = summarize_with_messages(history, summary, get_prompt("summary"))  # history와 summary로 요약 처리
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
-    r.set(redis_summary_key, summary)
+    r.set(redis_summary_key, summary_result)  # 요약 결과를 Redis에 저장
 
     return jsonify({"status": "ok"})
-
 
 @app.route("/<ai_label>")
 def user_page(ai_label):
