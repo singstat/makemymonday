@@ -109,11 +109,11 @@ def backup():
         return jsonify({"error": "Invalid request format"}), 400
 
     ai_label, history, summary = data[0], data[1], data[2]  # 데이터 수신
-
+    print(f"ai_label = {ai_label}")
     # Redis 키 설정
     redis_key = f"{ai_label}:{ai_label}"
     r.set(redis_key, json.dumps(history, ensure_ascii=False))  # history를 Redis에 저장
-
+    print(f"history = {history}")
     # 요약 처리 후 Redis에 저장
     summary_result = summarize_with_messages(history, summary, get_prompt("summary"))  # history와 summary로 요약 처리
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
