@@ -3,6 +3,7 @@ import os
 import json
 import redis
 from openai import OpenAI
+from prompts import get_prompt
 
 app = Flask(__name__)
 
@@ -35,7 +36,10 @@ def chat():
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
-    system_prompt = data.get("system_prompt", "You are a helpful assistant.")
+    ai_label = data.get("ai_label", "default")  # 클라이언트에서 ai_label을 가져옵니다.
+
+    # 시스템 프롬프트를 get_prompt를 사용하여 가져옵니다.
+    system_prompt = get_prompt(ai_label)
 
     # ✅ 토큰 계산 (요청 메시지 전체 기준)
     token_count = count_tokens(messages)
@@ -43,7 +47,7 @@ def chat():
 
     if token_count > 8192:
         # 1. 요약 및 사용자 메시지를 요약 함수에 전달
-        summary = summarize_with_messages(messages)
+        summary = summarize_with_messages(messages, get_prompt("summary"))
 
         # 2. 요약 값을 업데이트
         messages = [
@@ -75,34 +79,24 @@ def chat():
 
 
 
-def summarize_with_messages(messages):
-    """ 주어진 메시지 배열을 요약하는 함수 """
+def summarize_with_messages(messages, summary_prompt):
+    """요약 처리"""
     if not messages:
-        return ""  # 메시지가 없으면 빈 문자열 반환
+        return ""
 
-    summary_prompt = """Update the existing summary with the new information from the conversation. 
-Keep previous requirements and code unless replaced. 
-Output only two sections:
-1. Final requirements – updated bullet-point summary 
-2. Final code – the complete final working code (merged with updates).
-
-
-Do not include intermediate reasoning, partial code, or rejected attempts. 
-Do not restate the conversation history. 
-Only provide the requirements summary and the final code.\n"""
+    full_prompt = summary_prompt + "\n"
     for msg in messages:
-        summary_prompt += f"{msg['role']}: {msg['content']}\n"  # 대화 조합
+        full_prompt += f"{msg['role']}: {msg['content']}\n"
 
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": summary_prompt}]
+            messages=[{"role": "user", "content": full_prompt}]
         )
-        summary = resp.choices[0].message.content.strip()
-        return summary
+        return resp.choices[0].message.content.strip()
     except Exception as e:
         print(f"Error summarizing messages: {str(e)}")
-        return ""  # 에러 시 빈 문자열 반환
+        return ""
 
 
 @app.route("/backup", methods=["POST"])
@@ -120,11 +114,12 @@ def backup():
     r.set(redis_key, json.dumps(history, ensure_ascii=False))
 
     # 요약 처리 후 Redis에 저장
-    summary = summarize_with_messages(history)
+    summary = summarize_with_messages(messages, get_prompt("summary"))
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
     r.set(redis_summary_key, summary)
 
     return jsonify({"status": "ok"})
+
 @app.route("/<ai_label>")
 def user_page(ai_label):
     # Redis 키 설정
@@ -154,16 +149,7 @@ def user_page(ai_label):
     summary = r.get(redis_summary_key) or ""
 
     # 시스템 프롬프트 업데이트
-    if ai_label== "test":
-        system_prompt = """Only answer what the user explicitly asks; do not add anything extra. 
-                           If the user requests code modifications, always provide the entire updated code 
-                           in a fully working state, not just partial changes. 
-                           Do not explain alternatives or unrelated technologies unless the user specifically asks. 
-                           Keep answers direct, minimal, and focused only on the question."""
-    if ai_label == "monday":
-        system_prompt = "You are a helpful assistant."
-    else:
-        system_prompt = "You are a helpful assistant."  # 다른 사용자에 대한 기본 프롬프트
+    system_prompt = get_prompt(ai_label)
 
     # 클라이언트에 내려줄 모든 정보
     config = {
