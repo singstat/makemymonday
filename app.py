@@ -35,6 +35,7 @@ def chat():
     data = request.json
     messages = data.get("messages", [])
     model = data.get("model", "gpt-4o-mini")  # 기본 모델
+    system_prompt = data.get("system_prompt", "You are a helpful assistant.")
 
     # ✅ 토큰 계산 (요청 메시지 전체 기준)
     token_count = count_tokens(messages)

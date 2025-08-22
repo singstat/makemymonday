@@ -76,6 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username,
+                    system_prompt,
                     messages: totalMessages
                 })
             });
