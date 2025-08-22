@@ -17,6 +17,7 @@ r = redis.from_url(redis_url, decode_responses=True)
 
 import tiktoken
 
+
 def count_tokens(messages, model="gpt-4o-mini"):
     """메시지 배열의 토큰 수를 계산"""
     try:
@@ -54,10 +55,7 @@ def chat():
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": summary}  # 요약 추가
         ]
-
-        # 사용자 메시지는 삭제됨
         clear_user_messages = True  # 클라이언트에게 사용자 메시지를 지우라는 신호
-
     else:
         # 토큰 수가 8192 이하일 경우 그대로 유지
         messages = [
@@ -76,7 +74,6 @@ def chat():
         return jsonify({"answer": answer, "clear_user_messages": clear_user_messages})  # 삭제 신호 추가
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 def summarize_with_messages(messages, summary_prompt):
@@ -102,7 +99,6 @@ def summarize_with_messages(messages, summary_prompt):
 @app.route("/backup", methods=["POST"])
 def backup():
     data = request.json
-    print(f"📥 Received backup: {data}")  # 👈 확인용 로그
 
     if not isinstance(data, list) or len(data) < 3:
         return jsonify({"error": "Invalid request format"}), 400
@@ -114,18 +110,18 @@ def backup():
     r.set(redis_key, json.dumps(history, ensure_ascii=False))
 
     # 요약 처리 후 Redis에 저장
-    summary = summarize_with_messages(messages, get_prompt("summary"))
+    summary = summarize_with_messages(history, get_prompt("summary"))  # messages를 history로 변경
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
     r.set(redis_summary_key, summary)
 
     return jsonify({"status": "ok"})
+
 
 @app.route("/<ai_label>")
 def user_page(ai_label):
     # Redis 키 설정
     redis_key = f"{ai_label}:{ai_label}"
     redis_summary_key = f"{ai_label}:{ai_label}:summary"
-    redis_system_key = f"{ai_label}:{ai_label}:system"
 
     # Redis에서 읽기
     history_json = r.get(redis_key)
@@ -135,10 +131,10 @@ def user_page(ai_label):
             loaded = json.loads(history_json)
             # ✅ 올바른 구조인지 확인
             if (
-                isinstance(loaded, list) and len(loaded) > 0
-                and isinstance(loaded[0], dict)
-                and "role" in loaded[0]
-                and "content" in loaded[0]
+                    isinstance(loaded, list) and len(loaded) > 0
+                    and isinstance(loaded[0], dict)
+                    and "role" in loaded[0]
+                    and "content" in loaded[0]
             ):
                 history = loaded
             else:
@@ -161,6 +157,7 @@ def user_page(ai_label):
 
     template_name = "test.html" if ai_label == "test" else "ui.html"
     return render_template(template_name, config=config)
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
