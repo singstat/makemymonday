@@ -31,7 +31,7 @@ def count_tokens(messages, model="gpt-4o-mini"):
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """클라가 맥락/메타데이터/질문을 전부 들고 와서 서버는 OpenAI API 호출만 대신 해주는 단순 프록시."""
+
     data = request.json
     if not isinstance(data, list) or len(data) < 3:
         return jsonify({"error": "Invalid request format"}), 400
@@ -49,7 +49,7 @@ def chat():
     token_count = count_tokens(messages)
     print(f"🔢 Token count = {token_count}")
 
-    if token_count > 8192:
+    if token_count > (8192 - 100):
         # 1. 요약 및 사용자 메시지를 요약 함수에 전달
         summary = summarize_with_messages(messages, summary, get_prompt("summary"))
 
