@@ -1,81 +1,62 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Chat UI</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monday</title>
     <style>
-        html, body {
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
-            height: 100%;
-            font-family: system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Arial;
-            background: #f9fafb;
         }
-        #app {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
+        header {
+            background: #007bff; /* 헤더 색상 */
+            color: #fff;
+            padding: 5px 15px; /* 위 아래 패딩을 줄임 */
+            text-align: center;
         }
-        #chatArea {
-            flex: 1;
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        #sidView {
+        #messages {
+            height: 400px;
+            overflow-y: scroll;
+            background: #fff;
+            margin: 20px;
             padding: 10px;
-            background: #f0f0f0;
-            border-radius: 8px;
-            margin-bottom: 10px;
+            border: 1px solid #ccc;
         }
         .input-bar {
             display: flex;
-            gap: 8px;
-            padding: 8px;
-            background: #fff;
-            border-top: 1px solid #ddd;
+            justify-content: space-between;
+            margin: 20px;
         }
-        .input-bar input {
-            flex: 1;
-            padding: 12px;
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
             border: 1px solid #ccc;
-            border-radius: 8px;
-            font-size: 16px;
         }
-        .input-bar button {
-            padding: 0 16px;
-            border: none;
-            border-radius: 8px;
-            background: #111;
+        button {
+            padding: 10px;
+            background: #007bff;
             color: #fff;
-            font-weight: 700;
-            font-size: 16px;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
         }
     </style>
 </head>
 <body>
-     <div id="app">
-    <header>Monday UI</header>
-
-    <div id="messages">
-          <div id="chatArea"></div>
-          <small id="sidView"></small>
-    </div>
-
+    <header>
+        <h1>채팅 애플리케이션</h1>
+    </header>
+    <div id="messages"></div>
     <div class="input-bar">
-      <input id="userInput" placeholder="메시지를 입력하세요" autocomplete="off">
-      <button id="send">전송</button>
+        <input type="text" id="messageInput" placeholder="메시지를 입력하세요">
+        <button id="sendButton">전송</button>
     </div>
-  </div>
 
-  <!-- 외부 스크립트는 body 끝에 -->
-  <script>
-    window.MONDAY_CONFIG = {{ config | tojson | safe }};
-  </script>
-  <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
