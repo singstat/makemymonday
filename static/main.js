@@ -9,14 +9,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const config = window.MONDAY_CONFIG || {};
     const aiLabel = config.ai_label || "ai";
     let messages = config.history || [];
-    let summary = config.summary || "";
+
     let systemPrompt = config.system_prompt || "Only answer what the user explicitly asks; do not add anything extra.";
 
-    // 상단 라벨 표시
-    sidView.textContent = `AI Label: ${aiLabel}`;
+    let summary = config.summary || ""; // 받아온 summary
 
-    // 디버그 로그
-    appendDebugInfo("Summary: " + summary);
+    // Initialize the display of the summary
+    if (summary) {
+        summaryDisplay.innerText = `Summary: ${summary}`;
+    } else {
+        summaryDisplay.innerText = "No summary available."; // Summary가 없을 경우 메시지 표시
+    }
+
 
     // 코드/텍스트 구분 함수
     function isCodeLike(text) {
@@ -37,14 +41,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         chatArea.appendChild(newMsg);
         chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    // 디버그 정보 추가 함수
-    function appendDebugInfo(info) {
-        debug.innerHTML = ""; // 최신 정보만 출력
-        const debugMsg = document.createElement("div");
-        debugMsg.textContent = info;
-        debug.appendChild(debugMsg);
     }
 
     // 초기화: 과거 대화 불러오기
