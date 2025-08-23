@@ -17,18 +17,16 @@ r = redis.from_url(redis_url, decode_responses=True)
 
 import tiktoken
 
-
+_encoding_cache = {}
 def count_tokens(messages, model="gpt-4o-mini"):
-    """메시지 배열의 토큰 수를 계산"""
-    try:
-        encoding = tiktoken.encoding_for_model(model)
-    except KeyError:
-        encoding = tiktoken.get_encoding("cl100k_base")  # fallback
+    if model not in _encoding_cache:
+        try:
+            _encoding_cache[model] = tiktoken.encoding_for_model(model)
+        except KeyError:
+            _encoding_cache[model] = tiktoken.get_encoding("cl100k_base")
 
-    total_tokens = 0
-    for msg in messages:
-        total_tokens += len(encoding.encode(msg.get("content", "")))
-    return total_tokens
+    encoding = _encoding_cache[model]
+    return sum(len(encoding.encode(msg.get("content", ""))) for msg in messages)
 
 
 @app.route("/chat", methods=["POST"])
