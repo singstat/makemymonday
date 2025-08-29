@@ -4,7 +4,7 @@ const message   = document.getElementById('message');
 const summary   = document.getElementById('summary');
 const input_txt = document.getElementById('input_txt');
 
-// 답변 변수: 아직은 더미 스트링을 저장만 함
+// 답변 변수 (초기 더미 값)
 let output_txt = "답변이 올거임";
 
 // 유틸: 말풍선 추가
@@ -16,22 +16,34 @@ function appendBubble(text, type = 'sent') {
   message.scrollTop = message.scrollHeight; // 최신으로 스크롤
 }
 
-// 제출 핸들러: 내가 쓴 텍스트를 화면에 프린트
+// 제출 핸들러
 document.getElementById('composer').addEventListener('submit', (e) => {
   e.preventDefault();
-  const text = input_txt.value.trim();  // 입력 내용은 input_txt 변수의 value에 저장됨
+  const text = input_txt.value.trim();  // 사용자가 입력한 내용
   if (!text) return;
+
+  // 1) 내가 쓴 텍스트 프린트
   appendBubble(text, 'sent');
+
+  // 2) 입력값 저장(원하면 최근 입력을 전역에 남겨둠)
+  window.last_input_txt = text;
+
+  // 3) output_txt 프린트 (현재는 더미 응답)
+  appendBubble(output_txt, 'received');
+
+  // 4) 입력창 초기화 & 포커스
   input_txt.value = '';
   input_txt.focus();
-
-  // (참고) 현재는 output_txt를 출력하지 않고 보관만 함
-  // console.log('output_txt:', output_txt);
 });
 
 // summary 갱신 함수
 window.setSummary = (text) => {
   summary.textContent = text || '';
+};
+
+// 추후 실제 응답 바인딩을 위해 setter 제공 (선택)
+window.setOutput = (text) => {
+  output_txt = (text ?? '').toString();
 };
 
 // 초기 데모 데이터
