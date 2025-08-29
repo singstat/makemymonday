@@ -8,6 +8,9 @@ let output_txt  = "답변이 올거임";
 const messagesData = []; // {type:'sent'|'received', text:'...', ts:number}
 let hasSentOnExit = false;
 
+// 새로운 변수: 모든 메시지 텍스트 길이 합산
+let text_count = 0;
+
 // 현재 페이지명: /test -> "test", /sdf -> "sdf"
 const currentPageVar =
   (window.currentPageVar) ||
@@ -66,6 +69,9 @@ document.getElementById('composer').addEventListener('submit', (e) => {
 
   // 답변(현재는 더미 output_txt)도 출력
   appendBubble(output_txt, 'received');
+
+  // 디버그: 콘솔에서 text_count 확인 가능
+  console.log("text_count =", text_count);
 });
 
 // ===== save on exit =====
