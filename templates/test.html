@@ -17,12 +17,12 @@
     body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; }
 
     .app {
-      height: 100dvh; /* mobile safe */
+      height: 100dvh;
       max-width: 480px;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      overflow: hidden; /* keep internal scrolls contained */
+      overflow: hidden;
     }
 
     /* 메시지 프린트 영역 */
@@ -63,9 +63,9 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px;
-      min-height: 64px;    /* 짧을 때 높이 */
-      max-height: 180px;   /* 길 때는 내부 스크롤 */
-      overflow: auto;      /* 요구사항: 자체 스크롤 */
+      min-height: 64px;
+      max-height: 180px;
+      overflow: auto;
       line-height: 1.45;
     }
 
@@ -116,41 +116,7 @@
     </form>
   </div>
 
-  <script>
-    // 변수명 고정: message, summary, input_txt
-    const message   = document.getElementById('message');
-    const summary   = document.getElementById('summary');
-    const input_txt = document.getElementById('input_txt');
-
-    // 간단한 유틸
-    function appendBubble(text, type = 'sent') {
-      const b = document.createElement('div');
-      b.className = `bubble ${type}`;
-      b.textContent = text;
-      message.appendChild(b);
-      // 항상 최신 메시지가 보이게
-      message.scrollTop = message.scrollHeight;
-    }
-
-    // 제출 핸들러 (엔터/버튼)
-    document.getElementById('composer').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const text = input_txt.value.trim();
-      if (!text) return;
-      appendBubble(text, 'sent');
-      input_txt.value = '';
-      input_txt.focus();
-    });
-
-    // 외부에서 summary 내용을 갱신하기 쉽게 공개 함수 제공
-    window.setSummary = (text) => {
-      summary.textContent = text || '';
-      // 길어지면 내부에서만 스크롤됨 (CSS overflow)
-    };
-
-    // 데모(원치 않으면 삭제해도 됨): 초기 안내 문구
-    window.setSummary('여기에 요약 / 설명 텍스트가 표시됩니다. 내용이 매우 길어지면 이 상자 내부에서만 스크롤됩니다.');
-    appendBubble('대화를 시작해보세요.', 'received');
-  </script>
+  <!-- 외부 JS 로드 -->
+  <script src="{{ url_for('static', filename='test.js') }}"></script>
 </body>
 </html>

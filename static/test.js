@@ -1,117 +1,39 @@
-document.addEventListener("DOMContentLoaded", () => {
-    const input = document.getElementById("userInput");
-    const sendBtn = document.getElementById("send");
-    const sidView = document.getElementById("sidView");
-    const chatArea = document.getElementById("chatArea");
-    const debug = document.getElementById("debug");
+// static/test.js
+// 변수명 고정: message, summary, input_txt
+const message   = document.getElementById('message');
+const summary   = document.getElementById('summary');
+const input_txt = document.getElementById('input_txt');
 
-    // 서버에서 내려준 config
-    const config = window.MONDAY_CONFIG || {};
-    const aiLabel = config.ai_label || "ai";
-    let messages = config.history || [];
+// 답변 변수: 아직은 더미 스트링을 저장만 함
+let output_txt = "답변이 올거임";
 
-    let systemPrompt = config.system_prompt || "Only answer what the user explicitly asks; do not add anything extra.";
+// 유틸: 말풍선 추가
+function appendBubble(text, type = 'sent') {
+  const b = document.createElement('div');
+  b.className = `bubble ${type}`;
+  b.textContent = text;
+  message.appendChild(b);
+  message.scrollTop = message.scrollHeight; // 최신으로 스크롤
+}
 
-    let summary = config.summary || ""; // 받아온 summary
+// 제출 핸들러: 내가 쓴 텍스트를 화면에 프린트
+document.getElementById('composer').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = input_txt.value.trim();  // 입력 내용은 input_txt 변수의 value에 저장됨
+  if (!text) return;
+  appendBubble(text, 'sent');
+  input_txt.value = '';
+  input_txt.focus();
 
-    // Initialize the display of the summary
-    if (summary) {
-        summaryDisplay.innerText = `Summary: ${summary}`;
-    } else {
-        summaryDisplay.innerText = "No summary available."; // Summary가 없을 경우 메시지 표시
-    }
-
-
-    // 코드/텍스트 구분 함수
-    function isCodeLike(text) {
-        return text.includes("```") || text.includes("\t");
-    }
-
-    // 메시지 추가 함수
-    function appendMessage(sender, text, role = "assistant") {
-        let newMsg;
-        if (isCodeLike(text)) {
-            newMsg = document.createElement("pre");
-            newMsg.classList.add("msg", role, "code");
-            newMsg.textContent = `${sender}:\n${text}`;
-        } else {
-            newMsg = document.createElement("div");
-            newMsg.classList.add("msg", role);
-            newMsg.innerText = `${sender}: ${text}`;
-        }
-        chatArea.appendChild(newMsg);
-        chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    // 초기화: 과거 대화 불러오기
-    messages.forEach(msg => {
-        appendMessage(msg.role === "user" ? "User" : aiLabel, msg.content, msg.role);
-    });
-
-    // 메시지 전송 함수
-    async function sendMessage() {
-        const text = input.value.trim();
-        if (!text) return;
-
-        // 사용자 메시지 표시
-        appendMessage("User", text, "user");
-        messages.push({ role: "user", content: text });
-        input.value = "";
-
-        // 전체 메시지 배열
-        const totalMessages = [
-            { role: "system", content: systemPrompt },
-            { role: "system", content: summary },
-            ...messages
-        ];
-
-        try {
-            const resp = await fetch("/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify([
-                    aiLabel,         // ai_label
-                    totalMessages,   // history (messages 포괄)
-                    summary          // summary
-                ])
-            });
-
-            const data = await resp.json();
-            if (data.error) {
-                appendMessage(aiLabel, "(error: " + data.error + ")", "assistant");
-                appendDebugInfo("Error: " + data.error);
-                return;
-            }
-
-            // clear_user_messages 신호 → 메시지 초기화
-            if (data.clear_user_messages) {
-                messages = [];
-            }
-
-            const aiText = data.answer || "(empty)";
-            appendMessage(aiLabel, aiText, "assistant");
-            messages.push({ role: "assistant", content: aiText });
-
-        } catch (err) {
-            console.error("❌ Fetch error:", err);
-            appendMessage(aiLabel, "(fetch error)", "assistant");
-            appendDebugInfo("Fetch error: " + err.message);
-        }
-    }
-
-    // 브라우저 종료 시 메시지 백업
-    window.addEventListener("beforeunload", () => {
-        const data = JSON.stringify([aiLabel, messages, summary]);
-        const blob = new Blob([data], { type: "application/json" });
-        navigator.sendBeacon("/backup", blob);
-    });
-
-    // 이벤트 바인딩
-    sendBtn.addEventListener("click", sendMessage);
-    input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+  // (참고) 현재는 output_txt를 출력하지 않고 보관만 함
+  // console.log('output_txt:', output_txt);
 });
+
+// summary 갱신 함수
+window.setSummary = (text) => {
+  summary.textContent = text || '';
+};
+
+// 초기 데모 데이터
+window.setSummary('여기에 요약/설명 텍스트가 표시됩니다. 내용 길이에 따라 이 상자 내부에서만 스크롤됩니다.');
+appendBubble('대화를 시작해보세요.', 'received');
