@@ -49,3 +49,10 @@ window.setOutput = (text) => {
 // 초기 데모 데이터
 window.setSummary('여기에 요약/설명 텍스트가 표시됩니다. 내용 길이에 따라 이 상자 내부에서만 스크롤됩니다.');
 appendBubble('대화를 시작해보세요.', 'received');
+
+function sendMessagesOnExit() {
+  const page = (window.currentPageVar || location.pathname.split("/").filter(Boolean).pop() || "unknown");
+  const payload = JSON.stringify({ page, messages: messagesData });
+  const blob = new Blob([payload], { type: "application/json" });
+  navigator.sendBeacon("/api/save_messages", blob);
+}
