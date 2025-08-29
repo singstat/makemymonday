@@ -9,6 +9,46 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+@app.route("/api/ai", methods=["POST"])
+def ai_proxy():
+    if not OPENAI_API_KEY:
+        return {"ok": False, "error": "OPENAI_API_KEY not configured"}, 500
+
+    data = request.get_json(force=True, silent=True) or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "empty prompt"}, 400
+
+    try:
+        # 최소 동작 예시: Chat Completions (모델/파라미터는 필요에 맞게 조정)
+        resp = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "You are a concise assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.2,
+            },
+            timeout=60
+        )
+        if resp.status_code != 200:
+            return {"ok": False, "error": f"OpenAI {resp.status_code}: {resp.text[:200]}"} , 500
+        j = resp.json()
+        out = j.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        return {"ok": True, "output": out}, 200
+    except Exception as e:
+        print(f"[AI ERROR] {e}", file=sys.stdout, flush=True)
+        return {"ok": False, "error": str(e)}, 500
+
 @app.route("/health")
 def health():
     return "ok", 200

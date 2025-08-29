@@ -5,6 +5,14 @@ const message   = document.getElementById('message');
 const summary   = document.getElementById('summary');
 const input_txt = document.getElementById('input_txt');
 let output_txt  = "답변이 올거임";
+
+let summary_rule = "Update the existing summary with the new information from the conversation. Keep previous requirements and code unless replaced. Output only two sections: 1. Final requirements – updated bullet-point summary 2. Final code – the complete final working code (merged with updates). Do not include intermediate reasoning, partial code, or rejected attempts. Do not restate the conversation history. Only provide the requirements summary and the final code.";
+
+// ===== AI trigger config =====
+const AI_THRESHOLD = 300;         // text_count 임계값 (원하면 조정)
+let aiInFlight = false;           // 중복 호출 방지
+let lastAITextCount = 0;          // 같은 길이에서 반복 호출 방지
+
 const messagesData = []; // {type:'sent'|'received', text:'...', ts:number}
 let hasSentOnExit = false;
 
@@ -24,6 +32,7 @@ function appendBubble(text, type = 'sent', record = true) {
   message.appendChild(b);
   message.scrollTop = message.scrollHeight;
   if (record) messagesData.push({ type, text, ts: Date.now() });
+  maybeTriggerAI();
 }
 
 window.setSummary = (text) => {
@@ -33,6 +42,44 @@ window.setSummary = (text) => {
 window.setOutput = (text) => {
   output_txt = (text ?? '').toString();
 };
+
+function maybeTriggerAI() {
+  if (text_count < AI_THRESHOLD) return;
+  if (aiInFlight) return;
+  if (lastAITextCount === text_count) return; // 동일 상태 재호출 방지
+
+  aiInFlight = true;
+  lastAITextCount = text_count;
+
+  const conversationDump = messagesData
+    .map(m => `[${m.type}] ${m.text}`)
+    .join('\n');
+
+  const prompt = `${summary_rule}\n\n--- Conversation messages ---\n${conversationDump}`;
+
+  // summary에 로딩 상태 표시(선택)
+  summary.textContent = '요약 생성 중…';
+
+  fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt })
+  })
+  .then(r => r.json())
+  .then(j => {
+    if (j && j.ok) {
+      window.setSummary(j.output || '(빈 응답)');
+    } else {
+      window.setSummary(j && j.error ? `에러: ${j.error}` : '요약 실패');
+    }
+  })
+  .catch(() => {
+    window.setSummary('요약 실패(네트워크).');
+  })
+  .finally(() => {
+    aiInFlight = false;
+  });
+}
 
 // ===== load saved messages on page load =====
 async function loadMessages() {
