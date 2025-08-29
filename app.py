@@ -19,7 +19,7 @@ def save_messages():
     page = (data.get("page") or "unknown").strip().strip("/")
     key = f"{page}_message"  # 규칙 적용: /test -> test_message, /sdf -> sdf_message
     r.set(key, json.dumps(data.get("messages", []), ensure_ascii=False))
-    print("savemessage working")
+    print("save message calling")
     return {"ok": True, "key": key, "saved": len(data.get("messages", []))}, 200
 
 if __name__ == "__main__":
