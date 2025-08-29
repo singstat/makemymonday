@@ -27,6 +27,24 @@ def save_messages():
     print("save message calling")
     return {"ok": True, "key": key, "saved": len(data.get("messages", []))}, 200
 
+@app.route("/api/messages", methods=["GET"])
+def get_messages():
+    page = (request.args.get("page") or "unknown").strip().strip("/")
+    key = f"{page}_message"
+    raw = r.get(key) if r else None
+    messages = []
+    if raw:
+        try:
+            messages = json.loads(raw)
+        except Exception:
+            messages = []
+    return {
+        "ok": True,
+        "exists": bool(raw),
+        "key": key,
+        "messages": messages
+    }, 200
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))  # Railway는 PORT 환경변수를 설정함
     app.run(host="0.0.0.0", port=port)
