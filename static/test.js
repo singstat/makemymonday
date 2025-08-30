@@ -16,13 +16,34 @@ let lastAITextCount = 0;          // 같은 길이에서 반복 호출 방지
 const messagesData = []; // {type:'sent'|'received', text:'...', ts:number}
 let hasSentOnExit = false;
 
-// 새로운 변수: 모든 메시지 텍스트 길이 합산
-let text_count = 0;
-
 // 현재 페이지명: /test -> "test", /sdf -> "sdf"
 const currentPageVar =
   (window.currentPageVar) ||
   (location.pathname.split('/').filter(Boolean).pop() || 'unknown');
+
+// 새로운 변수: 모든 메시지 텍스트 길이 합산
+let text_count = 0;
+
+// 메시지 하나 출력할 때마다 길이를 누적하고, 곧바로 로그 찍음
+function appendBubble(text, type = 'sent', record = true) {
+  const b = document.createElement('div');
+  b.className = `bubble ${type}`;
+  b.textContent = text;
+  message.appendChild(b);
+  message.scrollTop = message.scrollHeight;
+
+  // 누적 + 즉시 로그
+  const addLen = (text || '').length;
+  text_count += addLen;
+  console.log('text_count =', text_count);   // <-- 여기서 찍힘
+
+  if (record) messagesData.push({ type, text, ts: Date.now() });
+
+  // (선택) AI 트리거
+  if (typeof maybeTriggerAI === 'function') maybeTriggerAI();
+}
+
+
 
 // ===== utils =====
 function appendBubble(text, type = 'sent', record = true) {
@@ -110,15 +131,12 @@ document.getElementById('composer').addEventListener('submit', (e) => {
   e.preventDefault();
   const text = input_txt.value.trim();
   if (!text) return;
-  appendBubble(text, 'sent');
+
+  appendBubble(text, 'sent');          // 여기서 한 번 로그
   input_txt.value = '';
   input_txt.focus();
 
-  // 답변(현재는 더미 output_txt)도 출력
-  appendBubble(output_txt, 'received');
-
-  // 디버그: 콘솔에서 text_count 확인 가능
-  console.log("text_count =", text_count);
+  appendBubble(output_txt, 'received'); // 여기서 또 한 번 로그
 });
 
 // ===== save on exit =====
