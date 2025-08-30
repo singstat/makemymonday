@@ -16,22 +16,59 @@ const currentPageVar =
   window.currentPageVar ||
   (location.pathname.split("/").filter(Boolean).pop() || "unknown");
 
-// 내부 규칙(줄바꿈 보존)
-const summary_rule = `Update the existing summary with the new information from the conversation.
-Keep previous requirements and code unless replaced.
-
-Output only two sections:
+// 내부 규칙: 코딩 전문 요약 + 두 섹션만 출력
+const summary_rule = `당신은 코딩 전문 어시스턴트입니다.
+아래 대화에서 코딩 관련 내용만 추려서 출력하세요.
+출력은 정확히 두 섹션만 포함해야 합니다:
 1. Final requirements – updated bullet-point summary
-2. Final code – the complete final working code (merged with updates).
-
-Do not include intermediate reasoning, partial code, or rejected attempts.
-Do not restate the conversation history.
-Only provide the requirements summary and the final code.`;
+2. Final code – the complete final working code (merged with updates)
+중간 추론/부분 코드/실패 시도/대화 재진술은 포함하지 마세요.`;
 
 // ===== AI trigger config =====
 const AI_THRESHOLD = 300;  // text_count 임계값
 let aiInFlight = false;    // 중복 호출 방지
 let lastAITextCount = 0;   // 동일 길이에서 재호출 방지
+
+function maybeTriggerAI() {
+  if (text_count < AI_THRESHOLD) return;
+  if (aiInFlight) return;
+  if (lastAITextCount === text_count) return;
+
+  aiInFlight = true;
+  lastAITextCount = text_count;
+
+  // 마지막 두 메시지는 코드에서 제외
+  const sliced = messagesData.slice(0, -2);
+  const conversationDump = sliced.map(m => `[${m.type}] ${m.text}`).join('\n');
+
+  // 간결한 프롬프트: 규칙 + 대화본문
+  const prompt = `${summary_rule}
+
+--- Conversation log ---
+${conversationDump}`;
+
+  summary.textContent = '요약 생성 중…';
+
+  fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt })
+  })
+  .then(async (r) => {
+    let j = {};
+    try { j = await r.json(); } catch(_) {}
+    if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+    return j;
+  })
+  .then(j => {
+    if (j?.ok) window.setSummary(j.output || '(빈 응답)');
+    else window.setSummary(j?.error ? `에러: ${j.error}` : '요약 실패');
+  })
+  .catch(e => window.setSummary(`요약 실패(네트워크): ${e.message || e}`))
+  .finally(() => { aiInFlight = false; });
+}
+
+
 
 // ===== utils =====
 function appendBubble(text, type = "sent", record = true) {
@@ -62,45 +99,7 @@ window.setOutput = (text) => {
   output_txt = (text ?? "").toString();
 };
 
-// ===== AI trigger & call =====
-function maybeTriggerAI() {
-  if (text_count < AI_THRESHOLD) return;
-  if (aiInFlight) return;
-  if (lastAITextCount === text_count) return;
 
-  aiInFlight = true;
-  lastAITextCount = text_count;
-
-  // 마지막 두 개 메시지를 제외한 대화만 요약에 사용
-  const sliced = messagesData.slice(0, -2);   // 뒤에서 2개 제외
-  const conversationDump = sliced
-    .map((m) => `[${m.type}] ${m.text}`)
-    .join("\n");
-
-  const prompt = `${summary_rule}\n\n--- Conversation messages ---\n${conversationDump}`;
-
-  summary.textContent = "요약 생성 중…";
-
-  fetch("/api/ai", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
-  })
-    .then((r) => r.json())
-    .then((j) => {
-      if (j && j.ok) {
-        window.setSummary(j.output || "(빈 응답)");
-      } else {
-        window.setSummary(j && j.error ? `에러: ${j.error}` : "요약 실패");
-      }
-    })
-    .catch((e) => {
-      window.setSummary(`요약 실패(네트워크): ${e.message || e}`);
-    })
-    .finally(() => {
-      aiInFlight = false;
-    });
-}
 
 // ===== load saved messages on page load =====
 async function loadMessages() {
