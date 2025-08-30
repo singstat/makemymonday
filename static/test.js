@@ -71,7 +71,9 @@ function maybeTriggerAI() {
   aiInFlight = true;
   lastAITextCount = text_count;
 
-  const conversationDump = messagesData
+  // 마지막 두 개 메시지를 제외한 대화만 요약에 사용
+  const sliced = messagesData.slice(0, -2);   // 뒤에서 2개 제외
+  const conversationDump = sliced
     .map((m) => `[${m.type}] ${m.text}`)
     .join("\n");
 
@@ -92,8 +94,8 @@ function maybeTriggerAI() {
         window.setSummary(j && j.error ? `에러: ${j.error}` : "요약 실패");
       }
     })
-    .catch(() => {
-      window.setSummary("요약 실패(네트워크).");
+    .catch((e) => {
+      window.setSummary(`요약 실패(네트워크): ${e.message || e}`);
     })
     .finally(() => {
       aiInFlight = false;
